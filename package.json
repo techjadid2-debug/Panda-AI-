@@ -7,7 +7,8 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "migrate": "node --env-file-if-exists=.env.local scripts/migrate.mjs"
+    "migrate": "node --env-file-if-exists=.env.local scripts/migrate.mjs",
+    "webhook": "node --env-file-if-exists=.env.local scripts/telegram-webhook.mjs"
   },
   "dependencies": {
     "@neondatabase/serverless": "^1.1.0",

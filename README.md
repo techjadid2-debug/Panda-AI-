@@ -11,6 +11,7 @@ npm run dev
 1. `vercel env pull .env.local` (yoki quyidagi o‘zgaruvchilarni qo‘lda yozing).
 2. `npm run migrate` — Neon bazasida jadvallarni yaratadi. Ilova ishga tushganda ham migratsiyalar avtomatik qo‘llanadi.
 3. `npm run dev`.
+4. Deploydan keyin bir marta: `npm run webhook` — Telegram tugmalari (tasdiqlash, «Bajarildi») ishlashi uchun webhook’ni ro‘yxatdan o‘tkazadi. Talab qiladi: `APP_URL`, `TELEGRAM_BOT_TOKEN`, `TELEGRAM_WEBHOOK_SECRET`. Bu qadamsiz tugmalar bosilganda hech narsa bo‘lmaydi.
 
 ## Muhit o‘zgaruvchilari
 
@@ -34,14 +35,19 @@ npm run dev
 
 ## Ma’lumot manbai
 
-Connector quyidagilarni kutadi: `GET /analytics/sales` → `pipeline`, `conversion`, `overdueFollowups`, `hotLeads`, `weeklyRevenue`; `GET /analytics/finance` → `revenue`, `expenses`, `cashBalance`, `planRevenue`, `overdueInvoices`.
+Connector quyidagilarni kutadi: `GET /analytics/sales` → `pipeline`, `conversion`, `overdueFollowups`, `hotLeads`, `weeklyRevenue`; `GET /analytics/finance` → `revenue`, `expenses`, `cashBalance`, `planRevenue`, `overdueInvoices`. Hammasi **raqam** bo‘lishi shart.
+
+Javob shu shaklga mos kelmasa, brif demo ma’lumot bilan tayyorlanadi va panelda `DEMO MA’LUMOT` deb ko‘rinadi; qaysi maydon noto‘g‘riligi server loglarida yoziladi. `INTERNAL_API_URL` yo‘l prefiksi bilan ham berilishi mumkin (`https://api.example.com/v1`).
 
 ## Ish jarayoni
 
-- Cron 03:30 UTC (Toshkent 08:30) da agentlarni ishga tushiradi va CEO’ga brif yuboradi.
-- Bir kunga bitta brif: kun davomida qayta ishga tushirilsa dalil va muddatlar yangilanadi, qabul qilingan qarorlar o‘z holicha qoladi.
+- Cron 03:30 UTC (Toshkent 08:30) da agentlarni ishga tushiradi, CEO’ga brif va har bir jamoaga o‘z digestini yuboradi.
+- Bir kunga bitta brif: kun davomida qayta ishga tushirilsa dalil va muddatlar yangilanadi, qabul qilingan qarorlar o‘z holicha qoladi. Jamoalarga digest kuniga bir marta ketadi (`agent_alerts` orqali).
 - Qaror (panelda yoki Telegram tugmasida) atomik: faqat `draft` holatdagi amal egallanadi, har bir bosqich `decision_log` ga yoziladi.
 - Tasdiqlangan amal ijrochi jamoaga yuboriladi va `sent` holatiga o‘tadi; yuborilmasa `approved` bo‘lib qoladi va sabab panelda ko‘rinadi.
+- Ijrochi Telegramdagi «Bajarildi» tugmasini bossa (yoki CEO panelda belgilasa) amal `done` bo‘ladi. Yakunlangan ish `ochiqAmallar` tool’idan chiqib ketadi — agentlar uni ertasi kuni qayta taklif qilmaydi.
+
+Panelda oxirgi brifdan tashqari **tarix** ham bor: sarlavhadagi sana tanlovchi orqali oldingi kunlarning brifi ochiladi (`?sana=YYYY-MM-DD`).
 
 
 ## Agentlar va workflow
@@ -60,7 +66,7 @@ Kunlik workflow: `src/lib/workflows/daily-brief.ts`
 | --- | --- |
 | `biznesKorsatkichlari` | Bugungi savdo va moliya ko‘rsatkichlari |
 | `tarixiyTrend` | So‘nggi kunlar dinamikasi (`metric_snapshots`) |
-| `ochiqAmallar` | Oldingi kunlardan qolgan yopilmagan amallar — takrorlanmaslik uchun |
+| `ochiqAmallar` | Oldingi kunlardan qolgan yopilmagan amallar (`draft`/`approved`/`sent`) — takrorlanmaslik uchun |
 
 ### Raqam kafolati
 
@@ -76,7 +82,7 @@ Har bir agent chaqiruvi `agent_runs` jadvaliga yoziladi: model, holat, davomiyli
 
 System promptlar `src/lib/agents/prompts.ts` da — agent xatti-harakatini o‘zgartirish uchun shu faylni tahrirlang.
 
-> AI Gateway hozir so‘rovlarni rad etmoqda: Vercel hisobingizga karta biriktirilishi kerak (`vercel.com → AI → add card`), yoki `AI_GATEWAY_API_KEY` bering.
+> **AI Gateway hozir bloklangan.** Chaqiruvlar quyidagi xato bilan qaytmoqda: `AI Gateway requires a valid credit card on file to service requests`. Shu sababli brif hozir har doim zaxira qoidalar bilan tayyorlanmoqda. Yechish uchun Vercel hisobiga karta biriktiring (`vercel.com → AI → add card`) yoki `AI_GATEWAY_API_KEY` bering. Panelda `AGENTLAR` yozuvi chiqsa — hal bo‘lgan, `ZAXIRA QOIDALAR` chiqsa — hali bloklangan.
 
 ## Baza
 
