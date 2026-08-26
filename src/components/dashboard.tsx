@@ -12,6 +12,7 @@ type TeamOption = { key: string; label: string };
 type Notice = { tone: "error" | "info"; text: string } | null;
 
 const colors = { Moliya: "bg-amber-50 text-amber-800", Savdo: "bg-sky-50 text-sky-800", Marketing: "bg-fuchsia-50 text-fuchsia-800", CEO: "bg-emerald-50 text-emerald-800" };
+const OWNER_ORDER: Recommendation["owner"][] = ["Moliya", "Savdo", "Marketing", "CEO"];
 const statusLabels = { sent: "Yuborildi", approved: "Tasdiqlandi", rejected: "Rad etildi", draft: "Kutilmoqda", done: "Bajarildi" };
 
 export function Dashboard({ initialBrief, teams, user, dbReady, agentIssue, briefDates, selectedDate }: { initialBrief: Brief | null; teams: TeamOption[]; user: { name: string; role: Role } | null; dbReady: boolean; agentIssue: string | null; briefDates: string[]; selectedDate: string | null }) {
@@ -106,7 +107,7 @@ export function Dashboard({ initialBrief, teams, user, dbReady, agentIssue, brie
         <div className="mb-5 flex flex-col justify-between gap-4 md:flex-row md:items-center">
           <div>
             <h2 className="text-xl font-bold">CEO tasdiqlashi kerak bo‘lgan amallar</h2>
-            <p className="mt-1 text-sm text-slate-500">Kundalik ishlar CEO’ga yuborilmaydi: {teamActions.length} ta amal bo‘limlar digestida.</p>
+            <p className="mt-1 text-sm text-slate-500">Kundalik ishlar CEO’ga yuborilmaydi: {teamActions.length} ta amal quyidagi bo‘lim digestida.</p>
           </div>
           {teams.length > 0 && <select value={teamKey} onChange={(event) => setTeamKey(event.target.value)} className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-medium">{teams.map((team) => <option key={team.key} value={team.key}>{team.label}</option>)}</select>}
         </div>
@@ -134,6 +135,31 @@ export function Dashboard({ initialBrief, teams, user, dbReady, agentIssue, brie
           </div>
         </article>) : <p className="rounded-2xl bg-emerald-50 p-5 text-sm font-medium text-emerald-800">Bugun CEO aralashuvini talab qiladigan qaror yo‘q.</p>}</div>
       </section>
+
+      {teamActions.length > 0 && <section className="mt-6 rounded-3xl border border-[var(--line)] bg-white p-6">
+        <h2 className="text-xl font-bold">Bo‘lim digesti</h2>
+        <p className="mb-5 mt-1 text-sm text-slate-500">Bo‘limlar o‘zi bajaradigan ishlar — CEO tasdig‘i talab qilinmaydi.</p>
+        <div className="space-y-5">{OWNER_ORDER.map((owner) => {
+          const items = teamActions.filter((item) => item.owner === owner);
+          if (!items.length) return null;
+          return <div key={owner}>
+            <span className={`inline-block rounded-full px-2.5 py-1 text-xs font-bold ${colors[owner]}`}>{owner}</span>
+            <div className="mt-3 space-y-2">{items.map((item) => <article key={item.id} className="rounded-2xl border border-slate-100 bg-slate-50 p-4">
+              <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+                <div>
+                  <h3 className="font-semibold">{item.title}</h3>
+                  <p className="mt-1 text-sm text-slate-600">Dalil: {item.evidence}</p>
+                  <p className="mt-1 text-sm text-slate-600">Natija: {item.expectedResult}</p>
+                </div>
+                <div className="flex shrink-0 items-center gap-3">
+                  <span className={`text-xs ${isOverdue(item.dueAt) && item.status === "draft" ? "font-semibold text-rose-600" : "text-slate-500"}`}>{formatDue(item.dueAt)}</span>
+                  <span className={`rounded-lg px-2.5 py-1 text-xs font-semibold ${item.status === "done" ? "bg-emerald-100 text-emerald-800" : item.status === "rejected" ? "bg-slate-200 text-slate-600" : "border border-slate-200 bg-white text-slate-600"}`}>{statusLabels[item.status]}</span>
+                </div>
+              </div>
+            </article>)}</div>
+          </div>;
+        })}</div>
+      </section>}
     </>}
   </div></main>;
 }
