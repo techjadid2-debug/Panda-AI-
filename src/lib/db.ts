@@ -100,6 +100,29 @@ export async function getLatestBrief(): Promise<Brief | null> {
   } catch { return null; }
 }
 
+/** Tarix: tanlangan kunning brifi. */
+export async function getBriefByDate(briefDate: string): Promise<Brief | null> {
+  try {
+    const sql = await db();
+    if (!sql) return null;
+    const row = ((await sql.query(`SELECT ${BRIEF_COLUMNS} FROM briefs WHERE brief_date = $1`, [briefDate])) as Row[])[0];
+    return row ? await loadBrief(sql, row) : null;
+  } catch { return null; }
+}
+
+/** Panel sana tanlovchisi uchun: brif yozilgan kunlar, yangisidan eskisiga. */
+export async function listBriefDates(limit = 14): Promise<string[]> {
+  try {
+    const sql = await db();
+    if (!sql) return [];
+    const rows = (await sql.query(
+      `SELECT to_char(brief_date, 'YYYY-MM-DD') AS brief_date FROM briefs ORDER BY brief_date DESC LIMIT $1`,
+      [Math.max(1, Math.min(limit, 60))],
+    )) as Row[];
+    return rows.map((row) => String(row.brief_date));
+  } catch { return []; }
+}
+
 export async function getRecommendation(id: string): Promise<Recommendation | null> {
   const sql = await db();
   if (!sql) return null;

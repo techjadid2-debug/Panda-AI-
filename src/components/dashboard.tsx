@@ -1,8 +1,10 @@
 "use client";
 import { useState } from "react";
-import { Activity, Bot, Check, Clock3, LogOut, Play, Send, ShieldCheck, X } from "lucide-react";
+import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { Activity, Bot, Check, Clock3, History, LogOut, Play, Send, ShieldCheck, X } from "lucide-react";
 import { logoutAction } from "@/app/actions";
-import { formatDateTime, formatDue, isOverdue } from "@/lib/time";
+import { formatDateTime, formatDay, formatDue, isOverdue } from "@/lib/time";
 import type { Brief, Recommendation } from "@/lib/types";
 import type { Role } from "@/lib/session";
 
@@ -12,7 +14,8 @@ type Notice = { tone: "error" | "info"; text: string } | null;
 const colors = { Moliya: "bg-amber-50 text-amber-800", Savdo: "bg-sky-50 text-sky-800", Marketing: "bg-fuchsia-50 text-fuchsia-800", CEO: "bg-emerald-50 text-emerald-800" };
 const statusLabels = { sent: "Yuborildi", approved: "Tasdiqlandi", rejected: "Rad etildi", draft: "Kutilmoqda", done: "Bajarildi" };
 
-export function Dashboard({ initialBrief, teams, user, dbReady, agentIssue }: { initialBrief: Brief | null; teams: TeamOption[]; user: { name: string; role: Role } | null; dbReady: boolean; agentIssue: string | null }) {
+export function Dashboard({ initialBrief, teams, user, dbReady, agentIssue, briefDates, selectedDate }: { initialBrief: Brief | null; teams: TeamOption[]; user: { name: string; role: Role } | null; dbReady: boolean; agentIssue: string | null; briefDates: string[]; selectedDate: string | null }) {
+  const router = useRouter();
   const [brief, setBrief] = useState(initialBrief);
   const [loading, setLoading] = useState(false);
   const [teamKey, setTeamKey] = useState(teams[0]?.key ?? "");
@@ -20,6 +23,8 @@ export function Dashboard({ initialBrief, teams, user, dbReady, agentIssue }: { 
   const ceoActions = brief?.recommendations.filter((item) => item.notification !== "digest") ?? [];
   const teamActions = brief?.recommendations.filter((item) => item.notification === "digest") ?? [];
   const canDecide = user?.role === "ceo" && teams.length > 0;
+  // Eski kunni "yangilash" bugungi brifni qayta yozgan bo‘lardi — shuning uchun tarixda tugma o‘rniga qaytish havolasi.
+  const isHistorical = Boolean(selectedDate) && selectedDate !== briefDates[0];
 
   async function run() {
     setLoading(true); setNotice(null);
@@ -28,6 +33,7 @@ export function Dashboard({ initialBrief, teams, user, dbReady, agentIssue }: { 
       const payload = await response.json().catch(() => null);
       if (!response.ok) { setNotice({ tone: "error", text: payload?.error ?? "Agentlarni ishga tushirib bo‘lmadi." }); return; }
       setBrief(payload as Brief);
+      router.refresh(); // bugungi sana tanlovchida paydo bo‘lishi uchun
     } catch { setNotice({ tone: "error", text: "Tarmoq xatosi: brif yangilanmadi." }); }
     finally { setLoading(false); }
   }
@@ -55,7 +61,15 @@ export function Dashboard({ initialBrief, teams, user, dbReady, agentIssue }: { 
         <p className="mt-2 text-slate-600">Moliya, marketing va savdo agentlaridan bitta aniq kunlik qaror.</p>
       </div>
       <div className="flex items-center gap-2">
-        <button onClick={run} disabled={loading} className="flex items-center justify-center gap-2 rounded-xl bg-emerald-700 px-5 py-3 font-semibold text-white shadow-sm disabled:opacity-60"><Play size={18} fill="currentColor" />{loading ? "Agentlar ishlamoqda…" : "Brifni yangilash"}</button>
+        {briefDates.length > 1 && <select
+          value={selectedDate ?? briefDates[0] ?? ""}
+          onChange={(event) => router.push(event.target.value === briefDates[0] ? "/" : `/?sana=${event.target.value}`)}
+          aria-label="Brif sanasi"
+          className="rounded-xl border border-slate-200 bg-white px-3 py-3 text-sm font-medium"
+        >{briefDates.map((date, index) => <option key={date} value={date}>{index === 0 ? `${formatDay(date)} (oxirgi)` : formatDay(date)}</option>)}</select>}
+        {isHistorical
+          ? <Link href="/" className="flex items-center justify-center gap-2 rounded-xl border border-emerald-200 bg-white px-5 py-3 font-semibold text-emerald-800"><History size={18} /> Oxirgi brifga qaytish</Link>
+          : <button onClick={run} disabled={loading} className="flex items-center justify-center gap-2 rounded-xl bg-emerald-700 px-5 py-3 font-semibold text-white shadow-sm disabled:opacity-60"><Play size={18} fill="currentColor" />{loading ? "Agentlar ishlamoqda…" : "Brifni yangilash"}</button>}
         {user && <form action={logoutAction}><button type="submit" title={`${user.name} — chiqish`} className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-3 text-sm font-medium text-slate-600"><LogOut size={18} /></button></form>}
       </div>
     </header>

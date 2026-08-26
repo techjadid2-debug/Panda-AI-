@@ -41,3 +41,9 @@ export function dueInHours(hours: number, reference: Date = new Date()) {
   due.setUTCMinutes(0);
   return due.toISOString();
 }
+
+/** `YYYY-MM-DD` (brif sanasi) → "24-avgust". Vaqt qismi yo‘q, shuning uchun zona hisobi kerak emas. */
+export function formatDay(briefDate: string) {
+  const [, month, day] = briefDate.split("-");
+  return `${Number(day)}-${MONTHS[Number(month) - 1] ?? month}`;
+}
