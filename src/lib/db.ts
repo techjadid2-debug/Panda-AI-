@@ -6,7 +6,7 @@ import type { AgentInsight, Brief, BusinessSnapshot, DecisionChannel, DecisionSt
 type Row = Record<string, unknown>;
 type Sql = NeonQueryFunction<false, false>;
 
-const COLUMNS = `r.id, r.dedupe_key, r.title, r.owner, r.impact, r.notification, r.evidence, r.expected_result, r.due_at, r.status, r.team_key, r.sent_at, t.label AS team_label`;
+const COLUMNS = `r.id, r.dedupe_key, r.title, r.owner, r.impact, r.notification, r.evidence, r.expected_result, r.due_at, r.status, r.team_key, r.sent_at, r.done_at, t.label AS team_label`;
 const FROM = `FROM recommendations r LEFT JOIN teams t ON t.key = r.team_key`;
 const iso = (value: unknown) => (value instanceof Date ? value : new Date(String(value))).toISOString();
 
@@ -47,7 +47,7 @@ function mapRecommendation(row: Row): Recommendation {
     id: String(row.id), dedupeKey: String(row.dedupe_key), title: String(row.title),
     owner: row.owner as Recommendation["owner"], impact: row.impact as Recommendation["impact"], notification: row.notification as Recommendation["notification"],
     evidence: String(row.evidence), expectedResult: String(row.expected_result), dueAt: iso(row.due_at), status: row.status as DecisionStatus,
-    teamKey: (row.team_key as string | null) ?? null, teamLabel: (row.team_label as string | null) ?? null, sentAt: row.sent_at ? iso(row.sent_at) : null,
+    teamKey: (row.team_key as string | null) ?? null, teamLabel: (row.team_label as string | null) ?? null, sentAt: row.sent_at ? iso(row.sent_at) : null, doneAt: row.done_at ? iso(row.done_at) : null,
   };
 }
 
@@ -124,6 +124,18 @@ export async function markSent(id: string) {
   if (!sql) return null;
   await sql.query(`UPDATE recommendations SET status = 'sent', sent_at = now(), updated_at = now() WHERE id = $1 AND status = 'approved'`, [id]);
   return getRecommendation(id);
+}
+
+/** Atomik yakunlash: faqat `approved`/`sent` holatdagi qatorni egallaydi, ikkinchi bosish hech narsani o‘zgartirmaydi. */
+export async function markDone(id: string) {
+  const sql = await db();
+  if (!sql) return { recommendation: null, claimed: false };
+  const rows = (await sql.query(
+    `UPDATE recommendations SET status = 'done', done_at = now(), updated_at = now()
+     WHERE id = $1 AND status IN ('approved', 'sent') RETURNING id`,
+    [id],
+  )) as Row[];
+  return { recommendation: await getRecommendation(id), claimed: rows.length > 0 };
 }
 
 export async function logDecision(recommendationId: string, status: string, channel: DecisionChannel, actor: string, note?: string) {

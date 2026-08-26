@@ -17,7 +17,10 @@ async function call(method: string, body: unknown): Promise<{ ok: boolean; reaso
 
 export async function sendTask(task: Recommendation, team: Team) {
   const text = `🎯 *Yangi tasdiqlangan vazifa*\n\n*${esc(task.title)}*\n\nKutilgan natija: ${esc(task.expectedResult)}\nMuddat: ${esc(formatDue(task.dueAt))}\nManba: ${task.owner} agent`;
-  const result = await call("sendMessage", { chat_id: team.chatId, text, parse_mode: "Markdown" });
+  const result = await call("sendMessage", {
+    chat_id: team.chatId, text, parse_mode: "Markdown",
+    reply_markup: { inline_keyboard: [[{ text: "✅ Bajarildi", callback_data: `done:${task.id}` }]] },
+  });
   return { delivered: result.ok, reason: result.reason };
 }
 

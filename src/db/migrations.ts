@@ -91,4 +91,10 @@ export const migrations: Migration[] = [
       `CREATE INDEX IF NOT EXISTS agent_runs_date_idx ON agent_runs (brief_date, created_at DESC)`,
     ],
   },
+  {
+    id: "004_done_status",
+    statements: [
+      `ALTER TABLE recommendations ADD COLUMN IF NOT EXISTS done_at timestamptz`,
+    ],
+  },
 ];

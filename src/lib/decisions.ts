@@ -1,4 +1,4 @@
-import { claimRecommendation, getRecommendation, logDecision, markSent } from "@/lib/db";
+import { claimRecommendation, getRecommendation, logDecision, markDone, markSent } from "@/lib/db";
 import { resolveTeam } from "@/lib/teams";
 import { sendTask } from "@/lib/telegram";
 import type { DecisionChannel, Recommendation } from "@/lib/types";
@@ -28,4 +28,21 @@ export async function applyDecision({ id, decision, teamKey, channel, actor }: D
   }
   await logDecision(id, "sent", channel, actor, `Telegram: ${team.label}`);
   return { ok: true, recommendation: (await markSent(id)) ?? recommendation, delivery };
+}
+
+export type CompleteInput = { id: string; channel: DecisionChannel; actor: string };
+
+/** Vazifani yakunlash: panel ham, ijrochining Telegram tugmasi ham shu yo‘ldan o‘tadi. */
+export async function completeRecommendation({ id, channel, actor }: CompleteInput): Promise<DecisionResult> {
+  const existing = await getRecommendation(id);
+  if (!existing) return { ok: false, recommendation: null, error: "Amal topilmadi." };
+  if (existing.status === "draft") return { ok: false, recommendation: existing, error: "Amal hali tasdiqlanmagan." };
+  if (existing.status === "rejected") return { ok: false, recommendation: existing, error: "Rad etilgan amalni yakunlab bo‘lmaydi." };
+
+  const { recommendation, claimed } = await markDone(id);
+  if (!recommendation) return { ok: false, recommendation: null, error: "Holatni saqlab bo‘lmadi (DATABASE_URL?)." };
+  if (!claimed) return { ok: true, recommendation, alreadyDecided: true };
+
+  await logDecision(id, "done", channel, actor);
+  return { ok: true, recommendation };
 }

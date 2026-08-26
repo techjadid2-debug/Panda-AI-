@@ -10,7 +10,7 @@ type TeamOption = { key: string; label: string };
 type Notice = { tone: "error" | "info"; text: string } | null;
 
 const colors = { Moliya: "bg-amber-50 text-amber-800", Savdo: "bg-sky-50 text-sky-800", Marketing: "bg-fuchsia-50 text-fuchsia-800", CEO: "bg-emerald-50 text-emerald-800" };
-const statusLabels = { sent: "Yuborildi", approved: "Tasdiqlandi", rejected: "Rad etildi", draft: "Kutilmoqda" };
+const statusLabels = { sent: "Yuborildi", approved: "Tasdiqlandi", rejected: "Rad etildi", draft: "Kutilmoqda", done: "Bajarildi" };
 
 export function Dashboard({ initialBrief, teams, user, dbReady, agentIssue }: { initialBrief: Brief | null; teams: TeamOption[]; user: { name: string; role: Role } | null; dbReady: boolean; agentIssue: string | null }) {
   const [brief, setBrief] = useState(initialBrief);
@@ -32,7 +32,7 @@ export function Dashboard({ initialBrief, teams, user, dbReady, agentIssue }: { 
     finally { setLoading(false); }
   }
 
-  async function decide(item: Recommendation, decision: "approved" | "rejected") {
+  async function decide(item: Recommendation, decision: "approved" | "rejected" | "done") {
     setNotice(null);
     try {
       const response = await fetch(`/api/recommendations/${item.id}/decision`, {
@@ -42,7 +42,7 @@ export function Dashboard({ initialBrief, teams, user, dbReady, agentIssue }: { 
       const payload = await response.json().catch(() => null);
       if (payload?.recommendation) setBrief((current) => current ? { ...current, recommendations: current.recommendations.map((entry) => entry.id === item.id ? payload.recommendation as Recommendation : entry) } : current);
       if (!response.ok) setNotice({ tone: "error", text: payload?.error ?? "Qarorni saqlab bo‘lmadi." });
-      else if (payload?.alreadyDecided) setNotice({ tone: "info", text: "Bu amal bo‘yicha qaror allaqachon qabul qilingan." });
+      else if (payload?.alreadyDecided) setNotice({ tone: "info", text: decision === "done" ? "Bu vazifa allaqachon yakunlangan." : "Bu amal bo‘yicha qaror allaqachon qabul qilingan." });
       else if (payload?.delivery && !payload.delivery.delivered) setNotice({ tone: "error", text: `Tasdiqlandi, lekin Telegramga yetkazilmadi: ${payload.delivery.reason ?? "noma’lum xato"}` });
     } catch { setNotice({ tone: "error", text: "Tarmoq xatosi: qaror yuborilmadi." }); }
   }
@@ -113,7 +113,10 @@ export function Dashboard({ initialBrief, teams, user, dbReady, agentIssue }: { 
               <button onClick={() => decide(item, "rejected")} aria-label="Rad etish" className="rounded-xl border border-slate-200 bg-white p-2.5 text-slate-600"><X size={18} /></button>
               <button onClick={() => decide(item, "approved")} className="flex items-center gap-2 rounded-xl bg-emerald-700 px-3 py-2 text-sm font-semibold text-white"><Send size={16} /> Tasdiqlash</button>
             </div> : <span className="shrink-0 rounded-xl bg-slate-100 px-3 py-2 text-sm font-medium text-slate-500">CEO tasdig‘i kutilmoqda</span>)
-            : <div className={`flex shrink-0 items-center gap-2 rounded-xl px-3 py-2 text-sm font-semibold ${item.status === "rejected" ? "bg-slate-200 text-slate-600" : "bg-emerald-100 text-emerald-800"}`}>{item.status === "rejected" ? <X size={16} /> : <Check size={16} />} {statusLabels[item.status]}</div>}
+            : <div className="flex shrink-0 items-center gap-2">
+              <span className={`flex items-center gap-2 rounded-xl px-3 py-2 text-sm font-semibold ${item.status === "rejected" ? "bg-slate-200 text-slate-600" : item.status === "done" ? "bg-emerald-700 text-white" : "bg-emerald-100 text-emerald-800"}`}>{item.status === "rejected" ? <X size={16} /> : <Check size={16} />} {statusLabels[item.status]}</span>
+              {canDecide && (item.status === "approved" || item.status === "sent") && <button onClick={() => decide(item, "done")} className="rounded-xl border border-emerald-200 bg-white px-3 py-2 text-sm font-semibold text-emerald-800">Bajarildi</button>}
+            </div>}
           </div>
         </article>) : <p className="rounded-2xl bg-emerald-50 p-5 text-sm font-medium text-emerald-800">Bugun CEO aralashuvini talab qiladigan qaror yo‘q.</p>}</div>
       </section>
