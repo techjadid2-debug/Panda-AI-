@@ -177,7 +177,8 @@ export async function saveSnapshot(snapshot: BusinessSnapshot, source: string) {
   );
 }
 
-export async function claimCriticalAlert(alertKey: string) {
+/** Bir kalit boyicha 12 soatda bir marta yuborishga ruxsat beradi (kritik ogohlantirish, bolim digesti). */
+export async function claimAlert(alertKey: string) {
   const sql = await db();
   if (!sql) return false;
   const rows = (await sql.query(`SELECT last_sent_at FROM agent_alerts WHERE alert_key = $1`, [alertKey])) as Row[];

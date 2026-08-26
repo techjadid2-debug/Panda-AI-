@@ -49,3 +49,11 @@ export async function sendDailyBrief(brief: Brief) {
 export async function answerCallback(callbackQueryId: string, text: string) {
   await call("answerCallbackQuery", { callback_query_id: callbackQueryId, text });
 }
+
+export async function sendTeamDigest(items: Recommendation[], team: Team) {
+  if (!items.length) return { delivered: false, reason: "Digest bo‘sh" };
+  const lines = items.map((item) => `• *${esc(item.title)}*\n${esc(item.evidence)}\nNatija: ${esc(item.expectedResult)} · Muddat: ${esc(formatDue(item.dueAt))}`);
+  const text = `📋 *Bugungi bo‘lim ishlari*\n\n${lines.join("\n\n")}\n\nBu ishlar CEO tasdig‘ini talab qilmaydi — o‘zingiz bajaring.`;
+  const result = await call("sendMessage", { chat_id: team.chatId, text, parse_mode: "Markdown" });
+  return { delivered: result.ok, reason: result.reason };
+}
