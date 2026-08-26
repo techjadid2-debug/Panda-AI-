@@ -1,10 +1,34 @@
+import { z } from "zod";
 import type { BusinessSnapshot } from "@/lib/types";
+
 const demo: BusinessSnapshot = { sales: { pipeline: 486_000_000, conversion: 18, overdueFollowups: 14, hotLeads: 9, weeklyRevenue: 124_000_000 }, finance: { revenue: 412_000_000, expenses: 286_000_000, cashBalance: 178_000_000, planRevenue: 480_000_000, overdueInvoices: 3 } };
+
+const snapshotSchema = z.object({
+  sales: z.object({ pipeline: z.number(), conversion: z.number(), overdueFollowups: z.number(), hotLeads: z.number(), weeklyRevenue: z.number() }),
+  finance: z.object({ revenue: z.number(), expenses: z.number(), cashBalance: z.number(), planRevenue: z.number(), overdueInvoices: z.number() }),
+});
+
+/** `INTERNAL_API_URL` yo‘l prefiksi bilan berilishi mumkin (`https://api.example.com/v1`) — bosh `/` uni yeb yuborardi. */
+function endpoint(base: string, path: string) {
+  return new URL(path.replace(/^\/+/, ""), base.endsWith("/") ? base : `${base}/`);
+}
+
 export async function getBusinessSnapshot(): Promise<{ snapshot: BusinessSnapshot; source: "internal-api" | "demo" }> {
   const url = process.env.INTERNAL_API_URL, token = process.env.INTERNAL_API_TOKEN;
   if (!url || !token) return { snapshot: demo, source: "demo" };
   const headers = { Authorization: `Bearer ${token}`, Accept: "application/json" };
-  const [sales, finance] = await Promise.all([fetch(new URL(process.env.INTERNAL_API_SALES_PATH || "/analytics/sales", url), { headers, cache: "no-store" }), fetch(new URL(process.env.INTERNAL_API_FINANCE_PATH || "/analytics/finance", url), { headers, cache: "no-store" })]);
+  const [sales, finance] = await Promise.all([
+    fetch(endpoint(url, process.env.INTERNAL_API_SALES_PATH || "/analytics/sales"), { headers, cache: "no-store" }),
+    fetch(endpoint(url, process.env.INTERNAL_API_FINANCE_PATH || "/analytics/finance"), { headers, cache: "no-store" }),
+  ]);
   if (!sales.ok || !finance.ok) throw new Error("Ichki API savdo yoki moliya ma’lumotini qaytarmadi.");
-  return { snapshot: { sales: await sales.json(), finance: await finance.json() }, source: "internal-api" };
+
+  // Tekshiruvsiz maydon nomi mos kelmasa raqamlar `NaN` bo‘lib butun brif bo‘ylab tarqalardi.
+  const parsed = snapshotSchema.safeParse({ sales: await sales.json(), finance: await finance.json() });
+  if (!parsed.success) {
+    const issues = parsed.error.issues.map((issue) => `${issue.path.join(".") || "(ildiz)"}: ${issue.message}`).join("; ");
+    console.error(`Ichki API javobi kutilgan shaklda emas, demo ma’lumotga qaytildi — ${issues}`);
+    return { snapshot: demo, source: "demo" };
+  }
+  return { snapshot: parsed.data, source: "internal-api" };
 }
