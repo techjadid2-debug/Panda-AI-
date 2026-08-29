@@ -66,13 +66,123 @@ Yuqoridagilar bajarilgach:
 
 ---
 
-## Hali qilinmagan, lekin o'ylab ko'rishga arziydi
+## Kod bo'yicha qolgan ishlar (ulanishlardan tashqari hammasi)
 
-- **Testlar yo'q.** Loyihada test freymvorki umuman yo'q. Atomik qaror oqimi
-  (`claimRecommendation`, `markDone`) va raqam grounding tekshiruvi
-  (`hasUngroundedNumbers`) test bilan qoplashga eng arziydigan joylar.
-- **Eski `agent_briefs` jadvali** ishlatilmaydi — ma'lumot kerak bo'lmasa
-  `DROP TABLE agent_briefs`.
-- **`resolveTeam` har chaqiruvda `listTeams()` ni qayta o'qiydi.** Kuniga bir marta,
-  6 tagacha amal uchun sezilmaydi; digest ro'yxati kattalashsa optimizatsiya kerak.
-- **Repo hozir Public.** Ichki CEO paneli uchun Private ma'qulroq (Settings → Danger Zone).
+Kod bazasi to'liq tekshirildi (2026-08-30). Quyidagi ro'yxat ustuvorlik tartibida:
+A guruhi — Telegram jonli bo'lishi bilan otiladigan xatolar, E guruhi — uzoq muddatli
+infratuzilma. Bajarilgan band checkbox bilan belgilanadi.
+
+### A. Telegram jonli bo'lishidan OLDIN tuzatish shart
+
+Bu xatolar hozir sezilmaydi, chunki Telegram hali ulanmagan. Ulanishlar ochilgan
+zahoti birinchi kundanoq otadi.
+
+- [ ] **Digest yuborilmasa ham qulf band bo'lib qoladi.** `claimAlert` 12 soatlik
+  qulfni yuborishdan _oldin_ oladi; Telegram 429/5xx qaytarsa digest yo'qoladi va
+  12 soat qayta urinilmaydi (`src/lib/db.ts:181`, `src/lib/telegram.ts`). Qulfni
+  faqat muvaffaqiyatli yuborishda tasdiqlash yoki xatoda bo'shatish kerak.
+- [ ] **Paneldagi «Brifni yangilash» hech narsa yubormaydi.** `sendDailyBrief()` va
+  `notifyTeamDigests()` faqat cron marshrutida chaqiriladi (`src/app/api/cron/daily/route.ts`);
+  `POST /api/brief` brifni qayta yaratadi, lekin CEO xabari ham, digest ham ketmaydi.
+  Yetkazishni bitta umumiy funksiyaga chiqarish.
+- [ ] **Telegram Markdown escape to'liq emas.** `esc()` faqat `` _ * ` [ `` ni qochiradi;
+  sarlavhada `]`, `(`, `)` yoki `~` bo'lsa xabar 400 bilan yiqiladi (`src/lib/telegram.ts:4`).
+  MarkdownV2 to'liq to'plami yoki HTML'ga o'tish.
+- [ ] **Webhook va decision body validatsiyasiz.** Ikkalasida `as` type-assertion:
+  buzuq JSON 500 beradi va Telegram update'ni qayta uravermaydi
+  (`src/app/api/telegram/webhook/route.ts:12`,
+  `src/app/api/recommendations/[id]/decision/route.ts:10`). Zod allaqachon dependency.
+- [ ] **Noma'lum `teamKey` indamay boshqa jamoaga ketadi.** `resolveTeam` topilmagan
+  kalitda owner jamoa → `asosiy` → `teams[0]` ga tushib boraveradi — xato kalit vazifani
+  noto'g'ri chatga yuboradi (`src/lib/teams.ts:39`).
+- [ ] **Ichki API xatosida butun brif yiqiladi.** Sxema mos kelmasa demo fallback bor,
+  lekin non-2xx yoki tarmoq xatosida `throw` — cron to'liq to'xtaydi; fetch'larda
+  timeout ham yo'q (`src/lib/business.ts:21-24`).
+- [ ] **5 marshrutdan 3 tasida try/catch yo'q** (cron, decision, webhook) — cron yiqilsa
+  hech kimga hech qanday xabar bormaydi.
+
+### B. Agent va zaxira qoidalar sifati
+
+Gateway bloklanganda har kuni aynan zaxira yo'l ishlaydi — bu repodagi eng yupqa kod.
+
+- [ ] **Marketing fallback — qotib qolgan matn.** Doim «Kontent paketi tayyor», signal
+  doim `neytral`, snapshot'ga umuman qaramaydi (`src/lib/agents/fallback.ts:15`).
+  Moliya/Savdo kabi qoida mantig'i yozish.
+- [ ] **Fallback tavsiyalari doim bir xil 3 band.** Ma'lumotdan qat'i nazar bir xil
+  `dedupeKey`lar; ochiq tavsiyalar tekshirilmaydi, shuning uchun kechagi ochiq ishlar
+  takrorlanadi (`src/lib/agents/fallback.ts:23-30`). Kassa xavfi, konversiya tushishi,
+  pipeline to'xtashi qoidalarini qo'shish.
+- [ ] **`aiAvailable()` circuit breaker emas.** Faqat kalit borligini tekshiradi —
+  Gateway bloklanganda ham har brifda 3 ta agent chaqiruvi + 3 ta xato yozuvi, keyin
+  fallback (`src/lib/agents/run.ts:15`). Keshlangan «gateway bloklangan» holati yoki
+  arzon probe kerak.
+- [ ] **Qisman brif ham `AGENTLAR` deb belgilanadi.** 1–2 agent yiqilsa yoki CEO agent
+  ishlamasa ham `engine: "agentlar"` qotirilgan — `"qisman"` qiymati yo'q
+  (`src/lib/agents/assemble.ts:69`, `src/lib/types.ts:8`).
+- [ ] **Agent chaqiruvlarida retry/timeout yo'q.** Bitta o'tkinchi xato butun bo'lim
+  hisobotini fallbackka tushiradi (`src/lib/agents/run.ts:43,71`).
+- [ ] **Raqam-grounding zaif.** `allowedNumbers()` har metrikaning xom/yaxlitlangan/mln
+  shaklini qo'shadi — kichik sonlar (0, 3, 9, 14…) keng oq ro'yxatda, gallyutsinatsiya
+  o'tib ketadi; `money()` 500 mingdan kichik qiymatni «0 mln so'm» qiladi
+  (`src/lib/agents/metrics.ts:12,43-58`).
+- [ ] **`tarixiyTrend` xom qatorlarni to'kadi.** 30 kun × 12 metrika promptga kiradi,
+  delta/agregatsiya yo'q — «dinamika»ni model o'zi hisoblashi kutiladi
+  (`src/lib/agents/tools.ts:16-27`).
+
+### C. Panel / UI
+
+- [ ] **«Tizim ishlamoqda» indikatori soxta.** Hech qanday tekshiruvsiz doim yashil —
+  Gateway bloklanganda ham, baza yiqilganda ham (`src/components/dashboard.tsx:60`).
+- [ ] **Fallback banneri noto'g'ri shartda.** `agent_runs`da bitta xato bo'lsa ham
+  «zaxira qoidalar bilan tayyorlandi» chiqadi, `brief.engine` tekshirilmaydi; aksincha,
+  `engine === "qoidalar"` bo'lsa-yu xato yozuvi bo'lmasa banner umuman chiqmaydi
+  (`src/components/dashboard.tsx:81`).
+- [ ] **Digest bandlariga amal yo'q.** «Bo'lim digesti» faqat o'qish uchun: «Bajarildi»
+  ham, qayta biriktirish ham, CEO stoliga ko'tarish ham yo'q; `completeRecommendation`
+  `draft`ni rad etadi — digest ishi hech qachon `done` bo'lolmaydi
+  (`src/components/dashboard.tsx:139-162`, `src/lib/decisions.ts:39`). Telegram digest
+  xabarlarida ham «Bajarildi» tugmasi yo'q (`src/lib/telegram.ts:53-58`).
+- [ ] **`impact`, `sentAt`, `doneAt` ko'rsatilmaydi.** Agentlar ishlab chiqaradi, zod
+  tekshiradi, baza saqlaydi — UI tashlab yuboradi (`src/lib/types.ts:6`).
+- [ ] **Tasdiqlash/rad tugmalarida pending holat yo'q.** `decide()` da loading flag ham,
+  disable ham yo'q — ikki marta bosish mumkin (server atomik, lekin UI jim)
+  (`src/components/dashboard.tsx:42-55`).
+- [ ] **`loading.tsx` / `error.tsx` / `not-found.tsx` yo'q.** Bosh sahifa 5 ta DB
+  so'rovini Suspense'siz qiladi, xato chegarasi umuman yo'q (`src/app/`).
+- [ ] **Login'da urinishlar cheklovi yo'q.** Taqqoslash constant-time, lekin bitta
+  umumiy parolga cheksiz urinish mumkin (`src/app/actions.ts:6-13`).
+- [ ] **Mayda tozalash:** `CEO` owner o'lik branch (`src/components/dashboard.tsx:14`,
+  `src/lib/agents/assemble.ts:8`); `public/` da standart Next.js shablon assetlari;
+  `next.config.ts` bo'sh skaffold.
+
+### D. Ma'lumotlar qatlami va tozalash
+
+- [ ] **`decision_log` faqat yoziladi.** Har qaror actor/kanal/izoh bilan loglanadi,
+  lekin hech narsa o'qimaydi — panelda audit/tarix ko'rinishi yo'q (`src/lib/db.ts:164`).
+- [ ] **`agent_runs` telemetriyasi ko'rsatilmaydi.** Token, davomiylik, qadamlar
+  yig'iladi; faqat `latestAgentIssue` xato matnini o'qiydi (`src/lib/db.ts:233`).
+- [ ] **`recipient_chat_id` yoziladi, o'qilmaydi.** Qayta yuborish (resend) uchun
+  kerak bo'ladi (`src/lib/db.ts:138`).
+- [ ] **Retention/tozalash yo'q.** `agent_runs`, `metric_snapshots`, `decision_log`,
+  `agent_alerts` cheksiz o'sadi.
+- [ ] **Eski `agent_briefs` jadvali uchun `005` migratsiyasi yo'q.** Hujjatda qo'lda
+  `DROP TABLE` deb turibdi — migratsiya qilib rasmiylashtirsa bo'ladi.
+- [ ] **`resolveTeam` har chaqiruvda `listTeams()` ni qayta o'qiydi.** Digest tsiklida
+  har band uchun bitta so'rov; ro'yxat kattalashsa keshlash kerak (`src/lib/teams.ts:39`,
+  `src/lib/workflows/daily-brief.ts:54`).
+- [ ] **O'lik kod:** `tashkentDueAt` eksport qilingan, hech qayerda chaqirilmaydi
+  (`src/lib/time.ts:13`); `/api/teams` marshrutini hech kim ishlatmaydi — panel
+  jamoalarni server prop orqali oladi (`src/app/api/teams/route.ts`).
+- [ ] **Hujjat bo'shlig'i:** `INTERNAL_API_SALES_PATH` / `INTERNAL_API_FINANCE_PATH`
+  o'zgaruvchilarini kod o'qiydi, README'da yo'q (`src/lib/business.ts:21-22`).
+
+### E. Testlar, CI va repo
+
+- [ ] **Test freymvorki umuman yo'q.** Birinchi nishonlar: `claimRecommendation` /
+  `markDone` atomikligi (`src/lib/db.ts:134,153`), `hasUngroundedNumbers`
+  (`src/lib/agents/metrics.ts:54`), `esc()`, `assembleBrief` 3-band chegarasi,
+  `metricTable` yaxlitlash.
+- [ ] **CI yo'q.** `.github/` papkasi yo'q — lint/typecheck/build faqat lokal;
+  `package.json` da `typecheck` skripti ham yo'q.
+- [ ] **Repo hozir Public.** Ichki CEO paneli uchun Private ma'qulroq
+  (Settings → Danger Zone).
