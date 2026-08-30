@@ -177,15 +177,25 @@ export async function saveSnapshot(snapshot: BusinessSnapshot, source: string) {
   );
 }
 
-/** Bir kalit boyicha 12 soatda bir marta yuborishga ruxsat beradi (kritik ogohlantirish, bolim digesti). */
+/** Bir kalit boyicha 12 soatda bir marta yuborishga ruxsat beradi (kritik ogohlantirish, bolim digesti). Bitta so‘rov — parallel ikki cron'dan faqat bittasi qulfni oladi. */
 export async function claimAlert(alertKey: string) {
   const sql = await db();
   if (!sql) return false;
-  const rows = (await sql.query(`SELECT last_sent_at FROM agent_alerts WHERE alert_key = $1`, [alertKey])) as Row[];
-  const lastSent = rows[0]?.last_sent_at ? new Date(iso(rows[0].last_sent_at)).getTime() : 0;
-  if (Date.now() - lastSent < 12 * 60 * 60 * 1000) return false;
-  await sql.query(`INSERT INTO agent_alerts (alert_key, last_sent_at) VALUES ($1, now()) ON CONFLICT (alert_key) DO UPDATE SET last_sent_at = now()`, [alertKey]);
-  return true;
+  const rows = (await sql.query(
+    `INSERT INTO agent_alerts (alert_key, last_sent_at) VALUES ($1, now())
+     ON CONFLICT (alert_key) DO UPDATE SET last_sent_at = now()
+     WHERE agent_alerts.last_sent_at < now() - interval '12 hours'
+     RETURNING alert_key`,
+    [alertKey],
+  )) as Row[];
+  return rows.length > 0;
+}
+
+/** Yuborish muvaffaqiyatsiz tugasa qulf qaytariladi — aks holda xabar 12 soat davomida umuman ketmay qoladi. */
+export async function releaseAlert(alertKey: string) {
+  const sql = await db();
+  if (!sql) return;
+  await sql.query(`DELETE FROM agent_alerts WHERE alert_key = $1`, [alertKey]);
 }
 
 export async function syncTeams(teams: Team[]) {

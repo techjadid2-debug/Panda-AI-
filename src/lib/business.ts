@@ -17,18 +17,25 @@ export async function getBusinessSnapshot(): Promise<{ snapshot: BusinessSnapsho
   const url = process.env.INTERNAL_API_URL, token = process.env.INTERNAL_API_TOKEN;
   if (!url || !token) return { snapshot: demo, source: "demo" };
   const headers = { Authorization: `Bearer ${token}`, Accept: "application/json" };
-  const [sales, finance] = await Promise.all([
-    fetch(endpoint(url, process.env.INTERNAL_API_SALES_PATH || "/analytics/sales"), { headers, cache: "no-store" }),
-    fetch(endpoint(url, process.env.INTERNAL_API_FINANCE_PATH || "/analytics/finance"), { headers, cache: "no-store" }),
-  ]);
-  if (!sales.ok || !finance.ok) throw new Error("Ichki API savdo yoki moliya ma’lumotini qaytarmadi.");
+  try {
+    // Timeout'siz osilib qolgan ichki API butun cron'ni osiltirib qo‘yardi.
+    const [sales, finance] = await Promise.all([
+      fetch(endpoint(url, process.env.INTERNAL_API_SALES_PATH || "/analytics/sales"), { headers, cache: "no-store", signal: AbortSignal.timeout(10_000) }),
+      fetch(endpoint(url, process.env.INTERNAL_API_FINANCE_PATH || "/analytics/finance"), { headers, cache: "no-store", signal: AbortSignal.timeout(10_000) }),
+    ]);
+    if (!sales.ok || !finance.ok) throw new Error(`Ichki API ${sales.ok ? finance.status : sales.status} qaytardi`);
 
-  // Tekshiruvsiz maydon nomi mos kelmasa raqamlar `NaN` bo‘lib butun brif bo‘ylab tarqalardi.
-  const parsed = snapshotSchema.safeParse({ sales: await sales.json(), finance: await finance.json() });
-  if (!parsed.success) {
-    const issues = parsed.error.issues.map((issue) => `${issue.path.join(".") || "(ildiz)"}: ${issue.message}`).join("; ");
-    console.error(`Ichki API javobi kutilgan shaklda emas, demo ma’lumotga qaytildi — ${issues}`);
+    // Tekshiruvsiz maydon nomi mos kelmasa raqamlar `NaN` bo‘lib butun brif bo‘ylab tarqalardi.
+    const parsed = snapshotSchema.safeParse({ sales: await sales.json(), finance: await finance.json() });
+    if (!parsed.success) {
+      const issues = parsed.error.issues.map((issue) => `${issue.path.join(".") || "(ildiz)"}: ${issue.message}`).join("; ");
+      console.error(`Ichki API javobi kutilgan shaklda emas, demo ma’lumotga qaytildi — ${issues}`);
+      return { snapshot: demo, source: "demo" };
+    }
+    return { snapshot: parsed.data, source: "internal-api" };
+  } catch (error) {
+    // Ichki API yiqilgani brifni to‘xtatmasligi kerak — panel baribir DEMO belgisi bilan ogohlantiradi.
+    console.error(`Ichki API bilan bog‘lanib bo‘lmadi, demo ma’lumotga qaytildi — ${error instanceof Error ? error.message : String(error)}`);
     return { snapshot: demo, source: "demo" };
   }
-  return { snapshot: parsed.data, source: "internal-api" };
 }

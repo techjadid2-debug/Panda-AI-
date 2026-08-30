@@ -35,12 +35,13 @@ export async function listTeams(): Promise<Team[]> {
   } catch { return seeds; }
 }
 
-/** Panel tanlovi → owner bo‘yicha jamoa → asosiy ijrochi tartibida. */
+/** Aniq tanlangan kalit topilmasa `null` — vazifa indamay boshqa jamoaning chatiga ketib qolmasligi uchun.
+ *  Kalit berilmaganda: owner bo‘yicha jamoa → asosiy ijrochi → birinchi jamoa. */
 export async function resolveTeam(owner: AgentName, key?: string | null): Promise<Team | null> {
   const teams = await listTeams();
-  const wanted = key?.toLowerCase();
-  return (wanted ? teams.find((team) => team.key === wanted) : undefined)
-    ?? teams.find((team) => team.key === OWNER_KEYS[owner])
+  const wanted = key?.trim().toLowerCase();
+  if (wanted) return teams.find((team) => team.key === wanted) ?? null;
+  return teams.find((team) => team.key === OWNER_KEYS[owner])
     ?? teams.find((team) => team.key === "asosiy")
     ?? teams[0]
     ?? null;

@@ -12,7 +12,9 @@ export async function applyDecision({ id, decision, teamKey, channel, actor }: D
   if (!existing) return { ok: false, recommendation: null, error: "Amal topilmadi." };
 
   const team = decision === "approved" ? await resolveTeam(existing.owner, teamKey) : null;
-  if (decision === "approved" && !team) return { ok: false, recommendation: existing, error: "Ijrochi jamoa sozlanmagan (TELEGRAM_TEAM_CHAT_IDS)." };
+  if (decision === "approved" && !team) {
+    return { ok: false, recommendation: existing, error: teamKey ? `«${teamKey}» jamoasi topilmadi — sahifani yangilab qayta urinib ko‘ring.` : "Ijrochi jamoa sozlanmagan (TELEGRAM_TEAM_CHAT_IDS)." };
+  }
 
   const { recommendation, claimed } = await claimRecommendation(id, decision, team);
   if (!recommendation) return { ok: false, recommendation: null, error: "Qarorni saqlab bo‘lmadi (DATABASE_URL?)." };

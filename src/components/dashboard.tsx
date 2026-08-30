@@ -33,7 +33,11 @@ export function Dashboard({ initialBrief, teams, user, dbReady, agentIssue, brie
       const response = await fetch("/api/brief", { method: "POST" });
       const payload = await response.json().catch(() => null);
       if (!response.ok) { setNotice({ tone: "error", text: payload?.error ?? "Agentlarni ishga tushirib bo‘lmadi." }); return; }
-      setBrief(payload as Brief);
+      setBrief(payload.brief as Brief);
+      // `skipped` — bugungi brif allaqachon yuborilgan (normal holat); faqat haqiqiy yuborish xatosi ko‘rsatiladi.
+      if (payload.delivery && !payload.delivery.delivered && !payload.delivery.skipped) {
+        setNotice({ tone: "error", text: `Brif yaratildi, lekin Telegramga yuborilmadi: ${payload.delivery.reason ?? "noma’lum xato"}` });
+      }
       router.refresh(); // bugungi sana tanlovchida paydo bo‘lishi uchun
     } catch { setNotice({ tone: "error", text: "Tarmoq xatosi: brif yangilanmadi." }); }
     finally { setLoading(false); }

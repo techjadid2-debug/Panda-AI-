@@ -3,9 +3,9 @@ import { fallbackInsight, fallbackRecommendations, fallbackSummary } from "@/lib
 import { SUB_AGENT_KEYS, aiAvailable, runCeoAgent, runSubAgent, type SubAgentKey } from "@/lib/agents/run";
 import type { AgentReport } from "@/lib/agents/schemas";
 import { getBusinessSnapshot } from "@/lib/business";
-import { claimAlert, saveBrief, saveSnapshot } from "@/lib/db";
+import { claimAlert, releaseAlert, saveBrief, saveSnapshot } from "@/lib/db";
 import { resolveTeam } from "@/lib/teams";
-import { sendCriticalAlerts, sendTeamDigest } from "@/lib/telegram";
+import { sendCriticalAlerts, sendDailyBrief, sendTeamDigest, type Delivery } from "@/lib/telegram";
 import { tashkentDate } from "@/lib/time";
 import type { Brief, BusinessSnapshot, Recommendation, Team } from "@/lib/types";
 
@@ -29,11 +29,14 @@ async function compose(snapshot: BusinessSnapshot, source: Brief["source"], brie
 }
 
 async function notifyCritical(brief: Brief) {
-  const critical: Recommendation[] = [];
+  const critical: Array<{ item: Recommendation; alertKey: string }> = [];
   for (const item of brief.recommendations.filter((entry) => entry.notification === "critical" && entry.status === "draft")) {
-    if (await claimAlert(`${brief.briefDate}:${item.dedupeKey}`)) critical.push(item);
+    const alertKey = `${brief.briefDate}:${item.dedupeKey}`;
+    if (await claimAlert(alertKey)) critical.push({ item, alertKey });
   }
-  if (critical.length) await sendCriticalAlerts(critical);
+  if (!critical.length) return;
+  const result = await sendCriticalAlerts(critical.map(({ item }) => item));
+  if (!result.delivered) for (const { alertKey } of critical) await releaseAlert(alertKey);
 }
 
 /** Kunlik workflow: ma’lumot → snapshot → bo‘lim agentlari → CEO agenti → brif → kritik ogohlantirish. */
@@ -61,8 +64,25 @@ export async function notifyTeamDigests(brief: Brief) {
   const sent: Array<{ team: string; delivered: boolean; reason?: string }> = [];
   for (const { team, items } of groups.values()) {
     // Kun davomida cron qayta ishga tushsa jamoa ikkinchi marta bezovta qilinmaydi.
-    if (!(await claimAlert(`digest:${brief.briefDate}:${team.key}`))) continue;
-    sent.push({ team: team.key, ...(await sendTeamDigest(items, team)) });
+    const alertKey = `digest:${brief.briefDate}:${team.key}`;
+    if (!(await claimAlert(alertKey))) continue;
+    const result = await sendTeamDigest(items, team);
+    if (!result.delivered) await releaseAlert(alertKey);
+    sent.push({ team: team.key, ...result });
   }
   return sent;
+}
+
+/** Brifni yetkazish — cron ham, paneldagi «Brifni yangilash» ham shu yagona yo‘ldan o‘tadi.
+ *  CEO chatiga kuniga bir marta (qulf bilan), jamoalarga digest; muvaffaqiyatsiz yuborish qulfni bo‘shatadi. */
+export async function deliverBrief(brief: Brief) {
+  let delivery: Delivery;
+  const alertKey = `brif:${brief.briefDate}`;
+  if (!(await claimAlert(alertKey))) {
+    delivery = { delivered: false, skipped: true, reason: "Bugungi brif CEO chatiga allaqachon yuborilgan" };
+  } else {
+    delivery = await sendDailyBrief(brief);
+    if (!delivery.delivered) await releaseAlert(alertKey);
+  }
+  return { delivery, digests: await notifyTeamDigests(brief) };
 }
