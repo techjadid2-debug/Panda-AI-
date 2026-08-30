@@ -65,8 +65,10 @@ export function assembleBrief(input: {
     .map(({ recommendation }) => recommendation);
 
   const summary = plan && !hasUngroundedNumbers(plan.executiveSummary, snapshot) ? plan.executiveSummary : fallbackSummary(snapshot);
+  // Bir yoki ikki agent (yoki CEO agenti) yiqilgan bo‘lsa brif to‘liq agent mahsuloti emas — panelda halol belgilanadi.
+  const engine: Brief["engine"] = plan && reports.length === ORDER.length ? "agentlar" : "qisman";
   return {
-    id: crypto.randomUUID(), briefDate, generatedAt: new Date().toISOString(), source, engine: "agentlar",
+    id: crypto.randomUUID(), briefDate, generatedAt: new Date().toISOString(), source, engine,
     executiveSummary: summary, insights: ORDER.map((key) => buildInsight(key, byKey.get(key), snapshot)), recommendations,
   };
 }

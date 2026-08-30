@@ -3,18 +3,19 @@ import { fallbackInsight, fallbackRecommendations, fallbackSummary } from "@/lib
 import { SUB_AGENT_KEYS, aiAvailable, runCeoAgent, runSubAgent, type SubAgentKey } from "@/lib/agents/run";
 import type { AgentReport } from "@/lib/agents/schemas";
 import { getBusinessSnapshot } from "@/lib/business";
-import { claimAlert, releaseAlert, saveBrief, saveSnapshot } from "@/lib/db";
+import { claimAlert, listOpenRecommendations, releaseAlert, saveBrief, saveSnapshot } from "@/lib/db";
 import { resolveTeam } from "@/lib/teams";
 import { sendCriticalAlerts, sendDailyBrief, sendTeamDigest, type Delivery } from "@/lib/telegram";
 import { tashkentDate } from "@/lib/time";
 import type { Brief, BusinessSnapshot, Recommendation, Team } from "@/lib/types";
 
-function fallbackBrief(snapshot: BusinessSnapshot, source: Brief["source"], briefDate: string): Brief {
+async function fallbackBrief(snapshot: BusinessSnapshot, source: Brief["source"], briefDate: string): Promise<Brief> {
+  const openKeys = new Set((await listOpenRecommendations(14).catch(() => [])).map((item) => item.dedupeKey));
   return {
     id: crypto.randomUUID(), briefDate, generatedAt: new Date().toISOString(), source, engine: "qoidalar",
     executiveSummary: fallbackSummary(snapshot),
     insights: [fallbackInsight("Moliya", snapshot), fallbackInsight("Savdo", snapshot), fallbackInsight("Marketing", snapshot)],
-    recommendations: fallbackRecommendations(snapshot),
+    recommendations: fallbackRecommendations(snapshot, openKeys),
   };
 }
 

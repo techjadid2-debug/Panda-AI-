@@ -5,5 +5,5 @@ export type DecisionChannel = "panel" | "telegram" | "system";
 export type Team = { key: string; label: string; chatId: string };
 export type Recommendation = { id: string; dedupeKey: string; title: string; owner: AgentName; impact: "Yuqori" | "O‘rta" | "Past"; notification: NotificationLevel; evidence: string; expectedResult: string; dueAt: string; status: DecisionStatus; teamKey?: string | null; teamLabel?: string | null; sentAt?: string | null; doneAt?: string | null };
 export type AgentInsight = { agent: AgentName; headline: string; detail: string; signal: "ijobiy" | "ogohlantirish" | "neytral"; metric: string };
-export type Brief = { id: string; briefDate: string; generatedAt: string; source: "internal-api" | "demo"; engine: "agentlar" | "qoidalar"; executiveSummary: string; insights: AgentInsight[]; recommendations: Recommendation[] };
+export type Brief = { id: string; briefDate: string; generatedAt: string; source: "internal-api" | "demo"; engine: "agentlar" | "qisman" | "qoidalar"; executiveSummary: string; insights: AgentInsight[]; recommendations: Recommendation[] };
 export type BusinessSnapshot = { sales: { pipeline: number; conversion: number; overdueFollowups: number; hotLeads: number; weeklyRevenue: number }; finance: { revenue: number; expenses: number; cashBalance: number; planRevenue: number; overdueInvoices: number } };

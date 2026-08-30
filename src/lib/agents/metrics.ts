@@ -9,7 +9,8 @@ export const METRIC_KEYS = [
 export type MetricKey = (typeof METRIC_KEYS)[number];
 export type Metric = { key: MetricKey; label: string; value: number; text: string };
 
-const money = (value: number) => `${Math.round(value / 1_000_000)} mln so‘m`;
+// 1 mln'dan kichik qiymat «0 mln so‘m» bo‘lib qolmasligi uchun ming so‘mga tushiladi.
+const money = (value: number) => (Math.abs(value) >= 1_000_000 ? `${Math.round(value / 1_000_000)} mln so‘m` : `${Math.round(value / 1_000)} ming so‘m`);
 const percent = (value: number) => `${Math.round(value)}%`;
 const count = (value: number) => `${value} ta`;
 
@@ -39,13 +40,13 @@ export function metricText(snapshot: BusinessSnapshot, keys: MetricKey[]) {
   return keys.map((key) => `${table[key].label.toLowerCase()} ${table[key].text}`).join(", ");
 }
 
-/** Model matnida uchrashi mumkin bo‘lgan yagona ruxsat etilgan raqamlar — snapshot’dan olinganlari. */
+/** Model matnida uchrashi mumkin bo‘lgan yagona ruxsat etilgan raqamlar — tool javobidagi matnlarda ko‘ringanlari.
+ *  Har metrikaning yaxlitlangan/million shakllarini ko‘r-ko‘rona qo‘shish kichik sonlarni keng oq ro‘yxatga aylantirardi. */
 function allowedNumbers(snapshot: BusinessSnapshot) {
   const allowed = new Set<string>();
   for (const metric of Object.values(metricTable(snapshot))) {
     allowed.add(String(metric.value));
-    allowed.add(String(Math.round(metric.value)));
-    allowed.add(String(Math.round(metric.value / 1_000_000)));
+    for (const token of metric.text.match(/\d+/g) ?? []) allowed.add(token);
   }
   return allowed;
 }

@@ -11,8 +11,19 @@ export const SUB_AGENT_KEYS: SubAgentKey[] = ["moliya", "savdo", "marketing"];
 const SUB_MODEL = "anthropic/claude-sonnet-5";
 const CEO_MODEL = "anthropic/claude-opus-5";
 
-/** Gateway kaliti (lokal) yoki Vercel OIDC tokeni bo‘lmasa agentlar ishga tushmaydi. */
-export function aiAvailable() { return Boolean(process.env.AI_GATEWAY_API_KEY || process.env.VERCEL_OIDC_TOKEN); }
+const GATEWAY_BLOCK_MS = 6 * 60 * 60 * 1000;
+let gatewayBlockedUntil = 0;
+
+/** Gateway kaliti (lokal) yoki Vercel OIDC tokeni bo‘lmasa — yoki gateway bloklangani aniqlangan bo‘lsa — agentlar ishga tushmaydi. */
+export function aiAvailable() {
+  return Boolean(process.env.AI_GATEWAY_API_KEY || process.env.VERCEL_OIDC_TOKEN) && Date.now() >= gatewayBlockedUntil;
+}
+
+/** Billing/kalit xatosi o‘tkinchi emas — instansiya tirik ekan har brifda 3 marta urinib xato yozuvi to‘plamaymiz. */
+function noteGatewayError(error: unknown) {
+  const message = error instanceof Error ? error.message : String(error);
+  if (/credit card|billing|payment|unauthorized|forbidden|invalid.{0,20}key/i.test(message)) gatewayBlockedUntil = Date.now() + GATEWAY_BLOCK_MS;
+}
 
 const providerOptions = (agent: string) => ({ gateway: { user: "ceo", tags: [`agent:${agent}`, "feature:daily-brief"] } });
 
@@ -38,12 +49,14 @@ export async function runSubAgent(key: SubAgentKey, snapshot: BusinessSnapshot, 
       tools: agentTools(snapshot),
       output: Output.object({ schema: agentReportSchema }),
       stopWhen: stepCountIs(6),
+      maxRetries: 2,
       providerOptions: providerOptions(key),
     });
-    const result = await agent.generate({ prompt: `Bugungi sana: ${briefDate}. Tool'lardan foydalanib bo‘limingiz bo‘yicha hisobot va takliflarni tayyorlang.` });
+    const result = await agent.generate({ prompt: `Bugungi sana: ${briefDate}. Tool'lardan foydalanib bo‘limingiz bo‘yicha hisobot va takliflarni tayyorlang.`, abortSignal: AbortSignal.timeout(120_000) });
     await log(meta, started, result, result.output);
     return result.output;
   } catch (error) {
+    noteGatewayError(error);
     await log(meta, started, null, null, error);
     console.error(`${key} agenti ishlamadi`, error);
     return null;
@@ -66,12 +79,14 @@ export async function runCeoAgent(reports: Array<{ key: SubAgentKey; report: Age
       tools: agentTools(snapshot),
       output: Output.object({ schema: ceoPlanSchema }),
       stopWhen: stepCountIs(5),
+      maxRetries: 2,
       providerOptions: providerOptions("ceo"),
     });
-    const result = await agent.generate({ prompt: `Bugungi sana: ${briefDate}. Bo‘lim agentlarining hisobotlari:\n\n${digest}\n\nHar bir taklifga qaror yozing va CEO uchun xulosa tayyorlang.` });
+    const result = await agent.generate({ prompt: `Bugungi sana: ${briefDate}. Bo‘lim agentlarining hisobotlari:\n\n${digest}\n\nHar bir taklifga qaror yozing va CEO uchun xulosa tayyorlang.`, abortSignal: AbortSignal.timeout(180_000) });
     await log(meta, started, result, result.output);
     return result.output;
   } catch (error) {
+    noteGatewayError(error);
     await log(meta, started, null, null, error);
     console.error("CEO agenti ishlamadi", error);
     return null;

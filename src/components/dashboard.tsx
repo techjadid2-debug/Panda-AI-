@@ -94,7 +94,7 @@ export function Dashboard({ initialBrief, teams, user, dbReady, agentIssue, brie
     </section> : <>
       <section className="mb-6 rounded-3xl bg-[#10271e] p-7 text-white shadow-xl shadow-emerald-950/10"><div className="flex flex-col gap-5 md:flex-row md:justify-between">
         <div>
-          <div className="mb-3 flex items-center gap-2 text-sm text-emerald-200"><ShieldCheck size={17} /> CEO AGENT · {brief.source === "demo" ? "DEMO MA’LUMOT" : "ICHKI API"} · {brief.engine === "agentlar" ? "AGENTLAR" : "ZAXIRA QOIDALAR"}</div>
+          <div className="mb-3 flex items-center gap-2 text-sm text-emerald-200"><ShieldCheck size={17} /> CEO AGENT · {brief.source === "demo" ? "DEMO MA’LUMOT" : "ICHKI API"} · {brief.engine === "agentlar" ? "AGENTLAR" : brief.engine === "qisman" ? "QISMAN AGENTLAR" : "ZAXIRA QOIDALAR"}</div>
           <h2 className="max-w-3xl text-2xl font-semibold leading-snug">{brief.executiveSummary}</h2>
         </div>
         <div className="shrink-0 text-sm text-emerald-100"><Clock3 className="mb-1" size={17} />{formatDateTime(brief.generatedAt)}</div>
