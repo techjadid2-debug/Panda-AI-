@@ -11,14 +11,15 @@ import type { Role } from "@/lib/session";
 type TeamOption = { key: string; label: string };
 type Notice = { tone: "error" | "info"; text: string } | null;
 
-const colors = { Moliya: "bg-amber-50 text-amber-800", Savdo: "bg-sky-50 text-sky-800", Marketing: "bg-fuchsia-50 text-fuchsia-800", CEO: "bg-emerald-50 text-emerald-800" };
-const OWNER_ORDER: Recommendation["owner"][] = ["Moliya", "Savdo", "Marketing", "CEO"];
+const colors = { Moliya: "bg-amber-50 text-amber-800", Savdo: "bg-sky-50 text-sky-800", Marketing: "bg-fuchsia-50 text-fuchsia-800" };
+const OWNER_ORDER: Recommendation["owner"][] = ["Moliya", "Savdo", "Marketing"];
 const statusLabels = { sent: "Yuborildi", approved: "Tasdiqlandi", rejected: "Rad etildi", draft: "Kutilmoqda", done: "Bajarildi" };
 
 export function Dashboard({ initialBrief, teams, user, dbReady, agentIssue, briefDates, selectedDate }: { initialBrief: Brief | null; teams: TeamOption[]; user: { name: string; role: Role } | null; dbReady: boolean; agentIssue: string | null; briefDates: string[]; selectedDate: string | null }) {
   const router = useRouter();
   const [brief, setBrief] = useState(initialBrief);
   const [loading, setLoading] = useState(false);
+  const [pendingId, setPendingId] = useState<string | null>(null);
   const [teamKey, setTeamKey] = useState(teams[0]?.key ?? "");
   const [notice, setNotice] = useState<Notice>(null);
   const ceoActions = brief?.recommendations.filter((item) => item.notification !== "digest") ?? [];
@@ -44,7 +45,7 @@ export function Dashboard({ initialBrief, teams, user, dbReady, agentIssue, brie
   }
 
   async function decide(item: Recommendation, decision: "approved" | "rejected" | "done") {
-    setNotice(null);
+    setNotice(null); setPendingId(item.id);
     try {
       const response = await fetch(`/api/recommendations/${item.id}/decision`, {
         method: "POST", headers: { "Content-Type": "application/json" },
@@ -56,12 +57,20 @@ export function Dashboard({ initialBrief, teams, user, dbReady, agentIssue, brie
       else if (payload?.alreadyDecided) setNotice({ tone: "info", text: decision === "done" ? "Bu vazifa allaqachon yakunlangan." : "Bu amal bo‘yicha qaror allaqachon qabul qilingan." });
       else if (payload?.delivery && !payload.delivery.delivered) setNotice({ tone: "error", text: `Tasdiqlandi, lekin Telegramga yetkazilmadi: ${payload.delivery.reason ?? "noma’lum xato"}` });
     } catch { setNotice({ tone: "error", text: "Tarmoq xatosi: qaror yuborilmadi." }); }
+    finally { setPendingId(null); }
   }
+
+  // Indikator real holatni aks ettiradi: baza yo‘q yoki agentlar ishlamagan bo‘lsa yashil yonmaydi.
+  const health = !dbReady
+    ? { dot: "bg-amber-500", text: "text-amber-700", label: "Cheklangan rejim — baza ulanmagan" }
+    : brief && brief.engine !== "agentlar"
+      ? { dot: "bg-amber-500", text: "text-amber-700", label: brief.engine === "qisman" ? "Qisman rejim — ba’zi agentlar ishlamadi" : "Zaxira rejim — agentlar ishlamayapti" }
+      : { dot: "bg-emerald-500", text: "text-emerald-700", label: "Tizim ishlamoqda" };
 
   return <main className="min-h-screen p-5 md:p-10"><div className="mx-auto max-w-6xl">
     <header className="mb-8 flex flex-col justify-between gap-5 md:flex-row md:items-center">
       <div>
-        <div className="mb-2 flex items-center gap-2 text-sm font-semibold text-emerald-700"><span className="h-2 w-2 rounded-full bg-emerald-500" /> Tizim ishlamoqda</div>
+        <div className={`mb-2 flex items-center gap-2 text-sm font-semibold ${health.text}`}><span className={`h-2 w-2 rounded-full ${health.dot}`} /> {health.label}</div>
         <h1 className="text-3xl font-bold tracking-tight">CEO boshqaruv markazi</h1>
         <p className="mt-2 text-slate-600">Moliya, marketing va savdo agentlaridan bitta aniq kunlik qaror.</p>
       </div>
@@ -79,10 +88,11 @@ export function Dashboard({ initialBrief, teams, user, dbReady, agentIssue, brie
       </div>
     </header>
 
-    {(!dbReady || !teams.length || agentIssue || notice) && <div className="mb-6 space-y-2">
+    {(!dbReady || !teams.length || (brief && brief.engine !== "agentlar") || notice) && <div className="mb-6 space-y-2">
       {!dbReady && <p className="rounded-2xl bg-amber-50 p-4 text-sm text-amber-900"><code className="font-mono">DATABASE_URL</code> sozlanmagan — brif va qarorlar saqlanmaydi.</p>}
       {!teams.length && <p className="rounded-2xl bg-amber-50 p-4 text-sm text-amber-900"><code className="font-mono">TELEGRAM_TEAM_CHAT_IDS</code> sozlanmagan — tasdiqlangan vazifani yuborish uchun ijrochi jamoa yo‘q.</p>}
-      {agentIssue && <p className="rounded-2xl bg-amber-50 p-4 text-sm text-amber-900">Agentlar ishlamadi, brif zaxira qoidalar bilan tayyorlandi — {agentIssue}</p>}
+      {brief?.engine === "qoidalar" && <p className="rounded-2xl bg-amber-50 p-4 text-sm text-amber-900">Brif zaxira qoidalar bilan tayyorlandi — {agentIssue ?? "AI Gateway sozlanmagan yoki bloklangan."}</p>}
+      {brief?.engine === "qisman" && <p className="rounded-2xl bg-amber-50 p-4 text-sm text-amber-900">Ba’zi agentlar ishlamadi, brif qisman zaxira qoidalar bilan to‘ldirildi{agentIssue ? ` — ${agentIssue}` : ""}.</p>}
       {notice && <p className={`rounded-2xl p-4 text-sm ${notice.tone === "error" ? "bg-rose-50 text-rose-900" : "bg-sky-50 text-sky-900"}`}>{notice.text}</p>}
     </div>}
 
@@ -121,20 +131,24 @@ export function Dashboard({ initialBrief, teams, user, dbReady, agentIssue, brie
               <div className="mb-2 flex flex-wrap items-center gap-2">
                 <span className={`rounded-full px-2.5 py-1 text-xs font-bold ${colors[item.owner]}`}>{item.owner}</span>
                 <span className={`text-xs font-semibold ${item.notification === "critical" ? "text-rose-600" : "text-amber-700"}`}>{item.notification === "critical" ? "KRITIK" : "CEO qarori"}</span>
+                <span className="rounded-full border border-slate-200 bg-white px-2 py-0.5 text-xs font-semibold text-slate-500">Ta’sir: {item.impact}</span>
                 <span className={`text-xs ${isOverdue(item.dueAt) && item.status === "draft" ? "font-semibold text-rose-600" : "text-slate-500"}`}>{formatDue(item.dueAt)}</span>
               </div>
               <h3 className="font-bold">{item.title}</h3>
               <p className="mt-1 text-sm text-slate-600">Dalil: {item.evidence}</p>
               <p className="mt-1 text-sm text-slate-600">Natija: {item.expectedResult}</p>
               {item.teamLabel && item.status !== "draft" && <p className="mt-1 text-sm text-slate-500">Ijrochi: {item.teamLabel}</p>}
+              {(item.sentAt || item.doneAt) && <p className="mt-1 text-xs text-slate-400">
+                {item.sentAt && <>Yuborildi: {formatDateTime(item.sentAt)}</>}{item.sentAt && item.doneAt && " · "}{item.doneAt && <>Bajarildi: {formatDateTime(item.doneAt)}</>}
+              </p>}
             </div>
             {item.status === "draft" ? (canDecide ? <div className="flex shrink-0 gap-2">
-              <button onClick={() => decide(item, "rejected")} aria-label="Rad etish" className="rounded-xl border border-slate-200 bg-white p-2.5 text-slate-600"><X size={18} /></button>
-              <button onClick={() => decide(item, "approved")} className="flex items-center gap-2 rounded-xl bg-emerald-700 px-3 py-2 text-sm font-semibold text-white"><Send size={16} /> Tasdiqlash</button>
+              <button onClick={() => decide(item, "rejected")} disabled={pendingId === item.id} aria-label="Rad etish" className="rounded-xl border border-slate-200 bg-white p-2.5 text-slate-600 disabled:opacity-50"><X size={18} /></button>
+              <button onClick={() => decide(item, "approved")} disabled={pendingId === item.id} className="flex items-center gap-2 rounded-xl bg-emerald-700 px-3 py-2 text-sm font-semibold text-white disabled:opacity-60"><Send size={16} /> {pendingId === item.id ? "Yuborilmoqda…" : "Tasdiqlash"}</button>
             </div> : <span className="shrink-0 rounded-xl bg-slate-100 px-3 py-2 text-sm font-medium text-slate-500">CEO tasdig‘i kutilmoqda</span>)
             : <div className="flex shrink-0 items-center gap-2">
               <span className={`flex items-center gap-2 rounded-xl px-3 py-2 text-sm font-semibold ${item.status === "rejected" ? "bg-slate-200 text-slate-600" : item.status === "done" ? "bg-emerald-700 text-white" : "bg-emerald-100 text-emerald-800"}`}>{item.status === "rejected" ? <X size={16} /> : <Check size={16} />} {statusLabels[item.status]}</span>
-              {canDecide && (item.status === "approved" || item.status === "sent") && <button onClick={() => decide(item, "done")} className="rounded-xl border border-emerald-200 bg-white px-3 py-2 text-sm font-semibold text-emerald-800">Bajarildi</button>}
+              {canDecide && (item.status === "approved" || item.status === "sent") && <button onClick={() => decide(item, "done")} disabled={pendingId === item.id} className="rounded-xl border border-emerald-200 bg-white px-3 py-2 text-sm font-semibold text-emerald-800 disabled:opacity-50">Bajarildi</button>}
             </div>}
           </div>
         </article>) : <p className="rounded-2xl bg-emerald-50 p-5 text-sm font-medium text-emerald-800">Bugun CEO aralashuvini talab qiladigan qaror yo‘q.</p>}</div>
@@ -158,6 +172,7 @@ export function Dashboard({ initialBrief, teams, user, dbReady, agentIssue, brie
                 <div className="flex shrink-0 items-center gap-3">
                   <span className={`text-xs ${isOverdue(item.dueAt) && item.status === "draft" ? "font-semibold text-rose-600" : "text-slate-500"}`}>{formatDue(item.dueAt)}</span>
                   <span className={`rounded-lg px-2.5 py-1 text-xs font-semibold ${item.status === "done" ? "bg-emerald-100 text-emerald-800" : item.status === "rejected" ? "bg-slate-200 text-slate-600" : "border border-slate-200 bg-white text-slate-600"}`}>{statusLabels[item.status]}</span>
+                  {canDecide && item.status === "draft" && <button onClick={() => decide(item, "done")} disabled={pendingId === item.id} className="rounded-lg border border-emerald-200 bg-white px-2.5 py-1 text-xs font-semibold text-emerald-800 disabled:opacity-50">Bajarildi</button>}
                 </div>
               </div>
             </article>)}</div>

@@ -1,7 +1,7 @@
 import { hasDatabase, listStoredTeams, syncTeams } from "@/lib/db";
 import type { AgentName, Team } from "@/lib/types";
 
-const OWNER_KEYS: Record<AgentName, string> = { Moliya: "moliya", Savdo: "savdo", Marketing: "marketing", CEO: "ceo" };
+const OWNER_KEYS: Record<AgentName, string> = { Moliya: "moliya", Savdo: "savdo", Marketing: "marketing" };
 
 /** `TELEGRAM_TEAM_CHAT_IDS` — JSON massiv: [{"key":"savdo","label":"Savdo jamoasi","chatId":"-100..."}] */
 export function envTeams(): Team[] {

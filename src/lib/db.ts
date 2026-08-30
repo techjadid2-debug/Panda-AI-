@@ -149,13 +149,14 @@ export async function markSent(id: string) {
   return getRecommendation(id);
 }
 
-/** Atomik yakunlash: faqat `approved`/`sent` holatdagi qatorni egallaydi, ikkinchi bosish hech narsani o‘zgartirmaydi. */
+/** Atomik yakunlash: `approved`/`sent` holatdagi qator, yoki CEO tasdig‘ini talab qilmaydigan digest bandi (`draft`).
+ *  Ikkinchi bosish hech narsani o‘zgartirmaydi. */
 export async function markDone(id: string) {
   const sql = await db();
   if (!sql) return { recommendation: null, claimed: false };
   const rows = (await sql.query(
     `UPDATE recommendations SET status = 'done', done_at = now(), updated_at = now()
-     WHERE id = $1 AND status IN ('approved', 'sent') RETURNING id`,
+     WHERE id = $1 AND (status IN ('approved', 'sent') OR (status = 'draft' AND notification = 'digest')) RETURNING id`,
     [id],
   )) as Row[];
   return { recommendation: await getRecommendation(id), claimed: rows.length > 0 };

@@ -16,6 +16,7 @@ export default async function LoginPage({ searchParams }: PageProps<"/login">) {
         <button type="submit" className="w-full rounded-xl bg-emerald-700 px-5 py-3 font-semibold text-white">Kirish</button>
       </form> : <p className="mt-6 rounded-2xl bg-amber-50 p-4 text-sm text-amber-900">Autentifikatsiya sozlanmagan. <code className="font-mono">AUTH_SECRET</code> va <code className="font-mono">APP_PASSWORD</code> muhit o‘zgaruvchilarini qo‘shing.</p>}
       {error === "1" && <p className="mt-4 text-sm font-medium text-rose-600">Parol noto‘g‘ri.</p>}
+      {error === "limit" && <p className="mt-4 text-sm font-medium text-rose-600">Juda ko‘p urinish — 10 daqiqadan keyin qayta urinib ko‘ring.</p>}
       {error === "config" && <p className="mt-4 text-sm font-medium text-rose-600">Server tomonda autentifikatsiya sozlanmagan.</p>}
     </div>
   </main>;

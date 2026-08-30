@@ -57,6 +57,8 @@ export async function sendTeamDigest(items: Recommendation[], team: Team): Promi
   if (!items.length) return { delivered: false, reason: "Digest bo‘sh" };
   const lines = items.map((item) => `• <b>${esc(item.title)}</b>\n${esc(item.evidence)}\nNatija: ${esc(item.expectedResult)} · Muddat: ${esc(formatDue(item.dueAt))}`);
   const text = `📋 <b>Bugungi bo‘lim ishlari</b>\n\n${lines.join("\n\n")}\n\nBu ishlar CEO tasdig‘ini talab qilmaydi — o‘zingiz bajaring.`;
-  const result = await call("sendMessage", { chat_id: team.chatId, text, parse_mode: "HTML" });
+  // Har bir band uchun «Bajarildi» tugmasi — jamoa vazifani yopishi bilan panelda ham holat o‘zgaradi.
+  const buttons = items.map((item) => [{ text: `✅ ${item.title.length > 30 ? `${item.title.slice(0, 30)}…` : item.title}`, callback_data: `done:${item.id}` }]);
+  const result = await call("sendMessage", { chat_id: team.chatId, text, parse_mode: "HTML", reply_markup: { inline_keyboard: buttons } });
   return { delivered: result.ok, reason: result.reason };
 }

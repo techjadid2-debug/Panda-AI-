@@ -38,7 +38,8 @@ export type CompleteInput = { id: string; channel: DecisionChannel; actor: strin
 export async function completeRecommendation({ id, channel, actor }: CompleteInput): Promise<DecisionResult> {
   const existing = await getRecommendation(id);
   if (!existing) return { ok: false, recommendation: null, error: "Amal topilmadi." };
-  if (existing.status === "draft") return { ok: false, recommendation: existing, error: "Amal hali tasdiqlanmagan." };
+  // Digest bandlari CEO tasdig‘isiz bajariladi — ular `draft` holatidan to‘g‘ridan-to‘g‘ri yakunlanadi.
+  if (existing.status === "draft" && existing.notification !== "digest") return { ok: false, recommendation: existing, error: "Amal hali tasdiqlanmagan." };
   if (existing.status === "rejected") return { ok: false, recommendation: existing, error: "Rad etilgan amalni yakunlab bo‘lmaydi." };
 
   const { recommendation, claimed } = await markDone(id);

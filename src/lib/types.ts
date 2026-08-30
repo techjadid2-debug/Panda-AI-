@@ -1,4 +1,4 @@
-export type AgentName = "Moliya" | "Savdo" | "Marketing" | "CEO";
+export type AgentName = "Moliya" | "Savdo" | "Marketing";
 export type DecisionStatus = "draft" | "approved" | "rejected" | "sent" | "done";
 export type NotificationLevel = "digest" | "approval_required" | "critical";
 export type DecisionChannel = "panel" | "telegram" | "system";
