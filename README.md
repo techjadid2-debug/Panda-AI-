@@ -29,6 +29,7 @@ npm run dev
 | `CRON_SECRET` | Kunlik cron himoyasi. Berilmasa cron yopiq. |
 | `APP_URL` | Telegram xabaridagi «Panelni ochish» tugmasi uchun. |
 | `INTERNAL_API_URL`, `INTERNAL_API_TOKEN` | Ichki API. Berilmasa ilova demo ma’lumotda ishlaydi. |
+| `INTERNAL_API_SALES_PATH`, `INTERNAL_API_FINANCE_PATH` | Ichki API yo‘llarini almashtirish uchun (standart: `/analytics/sales`, `/analytics/finance`). |
 | `AI_GATEWAY_API_KEY` | Lokalda AI Gateway uchun (Vercel’da OIDC token yetarli). |
 
 `AUTH_SECRET`/`APP_PASSWORD` berilmasa, panel faqat lokal `next dev` da ochiq qoladi; deployda hamma narsa yopiladi.

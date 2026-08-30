@@ -25,13 +25,20 @@ function syncOnce(seeds: Team[]) {
   return synced;
 }
 
+// Digest tsiklida har band uchun bazaga qatnamaslik uchun qisqa muddatli kesh.
+let cache: { teams: Team[]; at: number } | null = null;
+const CACHE_MS = 60_000;
+
 export async function listTeams(): Promise<Team[]> {
+  if (cache && Date.now() - cache.at < CACHE_MS) return cache.teams;
   const seeds = envTeams();
   if (!hasDatabase()) return seeds;
   try {
     await syncOnce(seeds);
     const stored = await listStoredTeams();
-    return stored.length ? stored : seeds;
+    const teams = stored.length ? stored : seeds;
+    cache = { teams, at: Date.now() };
+    return teams;
   } catch { return seeds; }
 }
 

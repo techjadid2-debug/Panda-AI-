@@ -1,11 +1,11 @@
 import { z } from "zod";
 import { guard } from "@/lib/auth";
-import { applyDecision, completeRecommendation } from "@/lib/decisions";
+import { applyDecision, completeRecommendation, resendTask } from "@/lib/decisions";
 
 export const runtime = "nodejs";
 
 const bodySchema = z.object({
-  decision: z.enum(["approved", "rejected", "done"]),
+  decision: z.enum(["approved", "rejected", "done", "resend"]),
   teamKey: z.string().trim().min(1).optional(),
 });
 
@@ -21,6 +21,10 @@ export async function POST(request: Request, { params }: RouteContext<"/api/reco
     if (body.decision === "done") {
       const done = await completeRecommendation({ id, channel: "panel", actor: auth.session.key });
       return Response.json(done, { status: done.ok ? 200 : done.recommendation ? 409 : 404 });
+    }
+    if (body.decision === "resend") {
+      const resent = await resendTask({ id, channel: "panel", actor: auth.session.key });
+      return Response.json(resent, { status: resent.ok ? 200 : resent.recommendation ? 409 : 404 });
     }
 
     const result = await applyDecision({ id, decision: body.decision, teamKey: body.teamKey, channel: "panel", actor: auth.session.key });

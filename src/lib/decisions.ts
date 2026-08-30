@@ -32,6 +32,28 @@ export async function applyDecision({ id, decision, teamKey, channel, actor }: D
   return { ok: true, recommendation: (await markSent(id)) ?? recommendation, delivery };
 }
 
+export type ResendInput = { id: string; channel: DecisionChannel; actor: string };
+
+/** Tasdiqlangan, lekin Telegramga yetib bormagan vazifani qayta yuborish. Saqlangan `recipientChatId` jamoa
+ *  ro‘yxatdan o‘chirilgan bo‘lsa ham manzilni tiklab beradi. */
+export async function resendTask({ id, channel, actor }: ResendInput): Promise<DecisionResult> {
+  const existing = await getRecommendation(id);
+  if (!existing) return { ok: false, recommendation: null, error: "Amal topilmadi." };
+  if (existing.status !== "approved") return { ok: false, recommendation: existing, error: "Faqat tasdiqlangan, hali yetkazilmagan amal qayta yuboriladi." };
+
+  const team = (await resolveTeam(existing.owner, existing.teamKey))
+    ?? (existing.recipientChatId ? { key: existing.teamKey ?? "saqlangan", label: existing.teamLabel ?? "Saqlangan ijrochi", chatId: existing.recipientChatId } : null);
+  if (!team) return { ok: false, recommendation: existing, error: "Ijrochi jamoa topilmadi." };
+
+  const delivery = await sendTask(existing, team);
+  if (!delivery.delivered) {
+    await logDecision(id, "approved", channel, actor, `Qayta yuborish ham bo‘lmadi: ${delivery.reason ?? "noma’lum xato"}`);
+    return { ok: true, recommendation: existing, delivery };
+  }
+  await logDecision(id, "sent", channel, actor, `Qayta yuborildi: ${team.label}`);
+  return { ok: true, recommendation: (await markSent(id)) ?? existing, delivery };
+}
+
 export type CompleteInput = { id: string; channel: DecisionChannel; actor: string };
 
 /** Vazifani yakunlash: panel ham, ijrochining Telegram tugmasi ham shu yo‘ldan o‘tadi. */

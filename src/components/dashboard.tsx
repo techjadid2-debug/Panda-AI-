@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { Activity, Bot, Check, Clock3, History, LogOut, Play, Send, ShieldCheck, X } from "lucide-react";
 import { logoutAction } from "@/app/actions";
 import { formatDateTime, formatDay, formatDue, isOverdue } from "@/lib/time";
-import type { Brief, Recommendation } from "@/lib/types";
+import type { AgentRunSummary, Brief, DecisionLogEntry, Recommendation } from "@/lib/types";
 import type { Role } from "@/lib/session";
 
 type TeamOption = { key: string; label: string };
@@ -15,7 +15,7 @@ const colors = { Moliya: "bg-amber-50 text-amber-800", Savdo: "bg-sky-50 text-sk
 const OWNER_ORDER: Recommendation["owner"][] = ["Moliya", "Savdo", "Marketing"];
 const statusLabels = { sent: "Yuborildi", approved: "Tasdiqlandi", rejected: "Rad etildi", draft: "Kutilmoqda", done: "Bajarildi" };
 
-export function Dashboard({ initialBrief, teams, user, dbReady, agentIssue, briefDates, selectedDate }: { initialBrief: Brief | null; teams: TeamOption[]; user: { name: string; role: Role } | null; dbReady: boolean; agentIssue: string | null; briefDates: string[]; selectedDate: string | null }) {
+export function Dashboard({ initialBrief, teams, user, dbReady, agentIssue, briefDates, selectedDate, decisionLog, agentRuns }: { initialBrief: Brief | null; teams: TeamOption[]; user: { name: string; role: Role } | null; dbReady: boolean; agentIssue: string | null; briefDates: string[]; selectedDate: string | null; decisionLog: DecisionLogEntry[]; agentRuns: AgentRunSummary[] }) {
   const router = useRouter();
   const [brief, setBrief] = useState(initialBrief);
   const [loading, setLoading] = useState(false);
@@ -44,7 +44,7 @@ export function Dashboard({ initialBrief, teams, user, dbReady, agentIssue, brie
     finally { setLoading(false); }
   }
 
-  async function decide(item: Recommendation, decision: "approved" | "rejected" | "done") {
+  async function decide(item: Recommendation, decision: "approved" | "rejected" | "done" | "resend") {
     setNotice(null); setPendingId(item.id);
     try {
       const response = await fetch(`/api/recommendations/${item.id}/decision`, {
@@ -148,6 +148,7 @@ export function Dashboard({ initialBrief, teams, user, dbReady, agentIssue, brie
             </div> : <span className="shrink-0 rounded-xl bg-slate-100 px-3 py-2 text-sm font-medium text-slate-500">CEO tasdig‘i kutilmoqda</span>)
             : <div className="flex shrink-0 items-center gap-2">
               <span className={`flex items-center gap-2 rounded-xl px-3 py-2 text-sm font-semibold ${item.status === "rejected" ? "bg-slate-200 text-slate-600" : item.status === "done" ? "bg-emerald-700 text-white" : "bg-emerald-100 text-emerald-800"}`}>{item.status === "rejected" ? <X size={16} /> : <Check size={16} />} {statusLabels[item.status]}</span>
+              {canDecide && item.status === "approved" && <button onClick={() => decide(item, "resend")} disabled={pendingId === item.id} className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 disabled:opacity-50">Qayta yuborish</button>}
               {canDecide && (item.status === "approved" || item.status === "sent") && <button onClick={() => decide(item, "done")} disabled={pendingId === item.id} className="rounded-xl border border-emerald-200 bg-white px-3 py-2 text-sm font-semibold text-emerald-800 disabled:opacity-50">Bajarildi</button>}
             </div>}
           </div>
@@ -179,6 +180,37 @@ export function Dashboard({ initialBrief, teams, user, dbReady, agentIssue, brie
           </div>;
         })}</div>
       </section>}
+
+      {agentRuns.length > 0 && <details className="mt-6 rounded-3xl border border-[var(--line)] bg-white p-6">
+        <summary className="cursor-pointer text-lg font-bold">Agent ishga tushishlari ({agentRuns.length})</summary>
+        <div className="mt-4 overflow-x-auto">
+          <table className="w-full min-w-[640px] text-left text-sm">
+            <thead><tr className="border-b border-slate-100 text-xs uppercase text-slate-400">
+              <th className="py-2 pr-4">Agent</th><th className="py-2 pr-4">Model</th><th className="py-2 pr-4">Holat</th><th className="py-2 pr-4">Davomiylik</th><th className="py-2 pr-4">Tokenlar</th><th className="py-2">Izoh</th>
+            </tr></thead>
+            <tbody>{agentRuns.map((run, index) => <tr key={index} className="border-b border-slate-50">
+              <td className="py-2 pr-4 font-semibold">{run.agent}</td>
+              <td className="py-2 pr-4 text-slate-500">{run.model.split("/").pop()}</td>
+              <td className={`py-2 pr-4 font-semibold ${run.status === "ok" ? "text-emerald-700" : "text-rose-600"}`}>{run.status}</td>
+              <td className="py-2 pr-4 text-slate-500">{(run.durationMs / 1000).toFixed(1)} s</td>
+              <td className="py-2 pr-4 text-slate-500">{run.inputTokens != null || run.outputTokens != null ? `${run.inputTokens ?? 0} → ${run.outputTokens ?? 0}` : "—"}</td>
+              <td className="py-2 text-slate-500">{run.error ? run.error.slice(0, 120) : run.steps != null ? `${run.steps} qadam` : "—"}</td>
+            </tr>)}</tbody>
+          </table>
+        </div>
+      </details>}
+
+      {decisionLog.length > 0 && <details className="mt-6 rounded-3xl border border-[var(--line)] bg-white p-6">
+        <summary className="cursor-pointer text-lg font-bold">Qarorlar jurnali ({decisionLog.length})</summary>
+        <div className="mt-4 space-y-2">{decisionLog.map((entry) => <div key={entry.id} className="flex flex-col gap-1 rounded-xl bg-slate-50 p-3 text-sm md:flex-row md:items-center md:justify-between">
+          <div>
+            <span className="font-semibold">{entry.title}</span>
+            <span className="ml-2 text-slate-500">{statusLabels[entry.status as keyof typeof statusLabels] ?? entry.status}</span>
+            {entry.note && <span className="ml-2 text-slate-400">· {entry.note}</span>}
+          </div>
+          <div className="shrink-0 text-xs text-slate-400">{entry.channel} · {entry.actor ?? "—"} · {formatDateTime(entry.at)}</div>
+        </div>)}</div>
+      </details>}
     </>}
   </div></main>;
 }

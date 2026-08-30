@@ -9,13 +9,7 @@ export function tashkentDate(reference: Date = new Date()) {
   return `${now.getUTCFullYear()}-${pad(now.getUTCMonth() + 1)}-${pad(now.getUTCDate())}`;
 }
 
-/** Toshkent vaqtida `dayOffset` kundan keyingi `hour:minute` — UTC ISO ko‘rinishida. */
-export function tashkentDueAt(dayOffset: number, hour: number, minute = 0, reference: Date = new Date()) {
-  const now = local(reference);
-  return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() + dayOffset, hour, minute) - OFFSET_MS).toISOString();
-}
-
-export function formatTime(iso: string) {
+function formatTime(iso: string) {
   const at = local(new Date(iso));
   return `${pad(at.getUTCHours())}:${pad(at.getUTCMinutes())}`;
 }

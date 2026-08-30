@@ -1,12 +1,12 @@
 import { neon, type NeonQueryFunction } from "@neondatabase/serverless";
 import { migrations } from "@/db/migrations";
 import { tashkentDate } from "@/lib/time";
-import type { AgentInsight, Brief, BusinessSnapshot, DecisionChannel, DecisionStatus, Recommendation, Team } from "@/lib/types";
+import type { AgentInsight, AgentRunSummary, Brief, BusinessSnapshot, DecisionChannel, DecisionLogEntry, DecisionStatus, Recommendation, Team } from "@/lib/types";
 
 type Row = Record<string, unknown>;
 type Sql = NeonQueryFunction<false, false>;
 
-const COLUMNS = `r.id, r.dedupe_key, r.title, r.owner, r.impact, r.notification, r.evidence, r.expected_result, r.due_at, r.status, r.team_key, r.sent_at, r.done_at, t.label AS team_label`;
+const COLUMNS = `r.id, r.dedupe_key, r.title, r.owner, r.impact, r.notification, r.evidence, r.expected_result, r.due_at, r.status, r.team_key, r.recipient_chat_id, r.sent_at, r.done_at, t.label AS team_label`;
 const FROM = `FROM recommendations r LEFT JOIN teams t ON t.key = r.team_key`;
 const iso = (value: unknown) => (value instanceof Date ? value : new Date(String(value))).toISOString();
 
@@ -47,7 +47,8 @@ function mapRecommendation(row: Row): Recommendation {
     id: String(row.id), dedupeKey: String(row.dedupe_key), title: String(row.title),
     owner: row.owner as Recommendation["owner"], impact: row.impact as Recommendation["impact"], notification: row.notification as Recommendation["notification"],
     evidence: String(row.evidence), expectedResult: String(row.expected_result), dueAt: iso(row.due_at), status: row.status as DecisionStatus,
-    teamKey: (row.team_key as string | null) ?? null, teamLabel: (row.team_label as string | null) ?? null, sentAt: row.sent_at ? iso(row.sent_at) : null, doneAt: row.done_at ? iso(row.done_at) : null,
+    teamKey: (row.team_key as string | null) ?? null, teamLabel: (row.team_label as string | null) ?? null, recipientChatId: (row.recipient_chat_id as string | null) ?? null,
+    sentAt: row.sent_at ? iso(row.sent_at) : null, doneAt: row.done_at ? iso(row.done_at) : null,
   };
 }
 
@@ -249,6 +250,54 @@ export async function saveAgentRun(run: { briefDate: string; agent: string; mode
      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10::jsonb)`,
     [run.briefDate, run.agent, run.model, run.status, Math.round(run.durationMs), run.inputTokens ?? null, run.outputTokens ?? null, run.steps ?? null, run.error ?? null, run.output ? JSON.stringify(run.output) : null],
   );
+}
+
+/** Panel uchun audit: tanlangan brif amallari bo‘yicha kim, qachon, qaysi kanaldan qaror qilgani. */
+export async function listDecisionLog(briefId: string, limit = 30): Promise<DecisionLogEntry[]> {
+  try {
+    const sql = await db();
+    if (!sql) return [];
+    const rows = (await sql.query(
+      `SELECT d.id, d.recommendation_id, d.status, d.channel, d.actor, d.note, d.created_at, r.title
+       FROM decision_log d JOIN recommendations r ON r.id = d.recommendation_id
+       WHERE r.brief_id = $1 ORDER BY d.created_at DESC LIMIT $2`,
+      [briefId, Math.max(1, Math.min(limit, 100))],
+    )) as Row[];
+    return rows.map((row) => ({
+      id: String(row.id), recommendationId: String(row.recommendation_id), title: String(row.title),
+      status: String(row.status), channel: String(row.channel),
+      actor: row.actor ? String(row.actor) : null, note: row.note ? String(row.note) : null, at: iso(row.created_at),
+    }));
+  } catch { return []; }
+}
+
+/** Panel uchun telemetriya: tanlangan kunda agentlar qanday ishlagani (davomiylik, tokenlar, xatolar). */
+export async function listAgentRuns(briefDate: string): Promise<AgentRunSummary[]> {
+  try {
+    const sql = await db();
+    if (!sql) return [];
+    const rows = (await sql.query(
+      `SELECT agent, model, status, duration_ms, input_tokens, output_tokens, steps, error, created_at
+       FROM agent_runs WHERE brief_date = $1 ORDER BY created_at DESC LIMIT 20`,
+      [briefDate],
+    )) as Row[];
+    return rows.map((row) => ({
+      agent: String(row.agent), model: String(row.model), status: row.status as AgentRunSummary["status"],
+      durationMs: Number(row.duration_ms), inputTokens: row.input_tokens == null ? null : Number(row.input_tokens),
+      outputTokens: row.output_tokens == null ? null : Number(row.output_tokens), steps: row.steps == null ? null : Number(row.steps),
+      error: row.error ? String(row.error) : null, at: iso(row.created_at),
+    }));
+  } catch { return []; }
+}
+
+/** Jurnal/telemetriya jadvallari cheksiz o‘smasin — cron har kuni eski qatorlarni tozalaydi. */
+export async function cleanupOldRows() {
+  const sql = await db();
+  if (!sql) return;
+  await sql.query(`DELETE FROM agent_runs WHERE created_at < now() - interval '90 days'`);
+  await sql.query(`DELETE FROM metric_snapshots WHERE captured_on < CURRENT_DATE - 180`);
+  await sql.query(`DELETE FROM agent_alerts WHERE last_sent_at < now() - interval '30 days'`);
+  await sql.query(`DELETE FROM decision_log WHERE created_at < now() - interval '365 days'`);
 }
 
 export async function latestAgentIssue(briefDate: string): Promise<string | null> {

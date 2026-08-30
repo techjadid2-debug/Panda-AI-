@@ -97,4 +97,11 @@ export const migrations: Migration[] = [
       `ALTER TABLE recommendations ADD COLUMN IF NOT EXISTS done_at timestamptz`,
     ],
   },
+  {
+    // Boshlang'ich skaffolddan qolgan, hech qayerda ishlatilmaydigan jadval.
+    id: "005_drop_agent_briefs",
+    statements: [
+      `DROP TABLE IF EXISTS agent_briefs`,
+    ],
+  },
 ];

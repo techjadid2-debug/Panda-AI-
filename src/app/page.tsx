@@ -1,6 +1,6 @@
 import { Dashboard } from "@/components/dashboard";
 import { currentSession } from "@/lib/auth";
-import { getBriefByDate, getLatestBrief, hasDatabase, latestAgentIssue, listBriefDates } from "@/lib/db";
+import { getBriefByDate, getLatestBrief, hasDatabase, latestAgentIssue, listAgentRuns, listBriefDates, listDecisionLog } from "@/lib/db";
 import { listTeams } from "@/lib/teams";
 import { tashkentDate } from "@/lib/time";
 
@@ -11,11 +11,13 @@ export default async function Home({ searchParams }: PageProps<"/">) {
   const selectedDate = typeof sana === "string" && /^\d{4}-\d{2}-\d{2}$/.test(sana) ? sana : null;
   const brief = selectedDate ? await getBriefByDate(selectedDate) : await getLatestBrief();
 
-  const [session, teams, briefDates, agentIssue] = await Promise.all([
+  const [session, teams, briefDates, agentIssue, decisionLog, agentRuns] = await Promise.all([
     currentSession(),
     listTeams(),
     listBriefDates(),
     latestAgentIssue(brief?.briefDate ?? tashkentDate()).catch(() => null),
+    brief ? listDecisionLog(brief.id) : Promise.resolve([]),
+    listAgentRuns(brief?.briefDate ?? tashkentDate()),
   ]);
 
   return <Dashboard
@@ -28,5 +30,7 @@ export default async function Home({ searchParams }: PageProps<"/">) {
     agentIssue={agentIssue}
     briefDates={briefDates}
     selectedDate={selectedDate}
+    decisionLog={decisionLog}
+    agentRuns={agentRuns}
   />;
 }
